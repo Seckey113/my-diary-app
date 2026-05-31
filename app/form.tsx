@@ -64,7 +64,7 @@ export function DiaryForm({ clientAction }: { clientAction: (formData: FormData)
         <div>
           <textarea
             name="content"
-            placeholder="どんな出来事がありましたか？感情や気付きも自由に書いてみましょう。"
+            placeholder="どんな出来事がありましたか？気持ちや気付きも自由に書いてみましょう。"
             required
             rows={5}
             className="w-full p-3 border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] focus:border-transparent outline-none text-[#333333] leading-relaxed transition resize-none"
@@ -74,7 +74,7 @@ export function DiaryForm({ clientAction }: { clientAction: (formData: FormData)
           <input
             name="tags"
             type="text"
-            placeholder="タグ（例: 友人、感謝、気づき）"
+            placeholder="タグ（例: 友人、感謝、気付き）"
             className="w-full p-3 border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] focus:border-transparent outline-none text-[#555555] transition"
           />
         </div>
