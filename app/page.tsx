@@ -1,65 +1,81 @@
-import Image from "next/image";
+import { getDiaries, addDiary, deleteDiary } from "./lib/sheets"; // ⭐️ deleteDiaryを追加
+import { revalidatePath } from "next/cache";
+import { DiaryForm } from "./form";
 
-export default function Home() {
+export default async function Home() {
+  const diaries = await getDiaries();
+
+  // 保存処理（Server Action）
+  async function createDiary(formData: FormData) {
+    "use server";
+    const title = formData.get("title") as string;
+    const content = formData.get("content") as string;
+    const tags = formData.get("tags") as string;
+
+    if (!title || !content) return;
+
+    await addDiary(title, content, tags);
+    revalidatePath("/");
+  }
+
+  // ⭐️ 削除処理（Server Actionを新しく追加）
+  async function removeDiary(formData: FormData) {
+    "use server";
+    const id = formData.get("id") as string;
+    if (!id) return;
+
+    // 裏側の削除関数を実行
+    await deleteDiary(id);
+    
+    // 画面を最新状態に更新
+    revalidatePath("/");
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+    <main className="p-8 max-w-2xl mx-auto">
+      <h1 className="text-3xl font-bold text-blue-600 mb-8">私の日記アプリ</h1>
+
+      <DiaryForm clientAction={createDiary} />
+
+      {/* 過去の日記一覧 */}
+      <div className="space-y-4">
+        {diaries.length === 0 ? (
+          <p className="text-gray-500 text-center py-8">まだ日記がありません。最初の思い出を記録しましょう！</p>
+        ) : (
+          [...diaries].reverse().map((diary) => (
+            <div key={diary.id} className="p-5 border rounded-lg shadow-sm bg-white hover:shadow-md transition">
+              
+              {/* ⭐️ タイトル部分と削除ボタンを横並びにするためのレイアウト修正 */}
+              <div className="flex justify-between items-start mb-3">
+                <div>
+                  <span className="font-bold text-xl block mb-1">{diary.title}</span>
+                  <span className="text-sm text-gray-500">{diary.date}</span>
+                </div>
+                
+                {/* ⭐️ 削除ボタン用のミニフォーム */}
+                <form action={removeDiary}>
+                  <input type="hidden" name="id" value={diary.id} />
+                  <button 
+                    type="submit" 
+                    className="text-red-500 hover:text-red-700 text-sm font-medium border border-red-100 hover:border-red-300 rounded px-2 py-1 transition bg-red-50/50 hover:bg-red-50"
+                  >
+                    削除
+                  </button>
+                </form>
+              </div>
+              
+              <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">{diary.content}</p>
+              {diary.tags && (
+                <div className="mt-4">
+                  <span className="inline-block bg-blue-100 text-blue-800 text-xs px-3 py-1 rounded-full font-medium">
+                    {diary.tags}
+                  </span>
+                </div>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+    </main>
   );
 }
