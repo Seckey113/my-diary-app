@@ -5,12 +5,12 @@ import { useFormStatus } from "react-dom";
 
 // ⭐️ 「保存中...」のときだけボタンの見た目と文字を変えるための、ボタン専用のミニアプリ
 function SubmitButton() {
-  const { pending } = useFormStatus(); // 現在保存処理中（通信中）かどうかが true / false で入る
+  const { pending } = useFormStatus();
 
   return (
     <button
       type="submit"
-      disabled={pending} // 保存中は連打できないようにボタンを無効化
+      disabled={pending}
       className={`w-full text-white font-bold py-3 px-4 rounded-lg transition ${
         pending 
           ? "bg-gray-400 cursor-not-allowed" 
@@ -24,7 +24,6 @@ function SubmitButton() {
 
 // ⭐️ フォーム全体の部品
 export function DiaryForm({ clientAction }: { clientAction: (formData: FormData) => Promise<void> }) {
-  // useActionStateを使い、処理が終わったらフォームをリセットするための仕掛け
   const [, formAction] = useActionState(async (prevState: any, formData: FormData) => {
     await clientAction(formData);
     return null;
@@ -36,12 +35,23 @@ export function DiaryForm({ clientAction }: { clientAction: (formData: FormData)
       <form 
         action={formAction} 
         onSubmit={(e) => {
-          // 保存ボタンが押されて通信が始まったら、一足先に入力欄をパッと空っぽにする（プロの技）
           const form = e.currentTarget;
           setTimeout(() => form.reset(), 50);
         }}
         className="space-y-4"
       >
+        {/* ⭐️ 新しく追加したカレンダー（日付選択）入力欄 */}
+        <div>
+          <label className="block text-sm font-medium text-gray-600 mb-1">
+            日付（未選択の場合は今日の日付になります）
+          </label>
+          <input
+            name="date"
+            type="date"
+            className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none text-gray-700 cursor-pointer"
+          />
+        </div>
+
         <div>
           <input
             name="title"
@@ -68,7 +78,7 @@ export function DiaryForm({ clientAction }: { clientAction: (formData: FormData)
             className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none"
           />
         </div>
-        {/* 先ほど上で作った、状態によって見た目が変わるボタンをここに配置 */}
+        
         <SubmitButton />
       </form>
     </div>

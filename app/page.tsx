@@ -1,4 +1,4 @@
-import { getDiaries, addDiary, deleteDiary } from "./lib/sheets"; // ⭐️ deleteDiaryを追加
+import { getDiaries, addDiary, deleteDiary } from "./lib/sheets";
 import { revalidatePath } from "next/cache";
 import { DiaryForm } from "./form";
 
@@ -8,26 +8,33 @@ export default async function Home() {
   // 保存処理（Server Action）
   async function createDiary(formData: FormData) {
     "use server";
+    
+    // ⭐️ フォームから送られてきた日付（date）を受け取る
+    const dateInput = formData.get("date") as string;
     const title = formData.get("title") as string;
     const content = formData.get("content") as string;
     const tags = formData.get("tags") as string;
 
     if (!title || !content) return;
 
-    await addDiary(title, content, tags);
+    // ⭐️ もし日付が選ばれていなかったら、今日の日本の日付を自動で設定する
+    const date = dateInput
+      ? new Date(dateInput).toLocaleDateString("ja-JP")
+      : new Date().toLocaleDateString("ja-JP");
+
+    // ⭐️ addDiaryの最初の引数に date を渡す
+    await addDiary(date, title, content, tags);
+    
     revalidatePath("/");
   }
 
-  // ⭐️ 削除処理（Server Actionを新しく追加）
+  // 削除処理（Server Action）
   async function removeDiary(formData: FormData) {
     "use server";
     const id = formData.get("id") as string;
     if (!id) return;
 
-    // 裏側の削除関数を実行
     await deleteDiary(id);
-    
-    // 画面を最新状態に更新
     revalidatePath("/");
   }
 
@@ -45,14 +52,12 @@ export default async function Home() {
           [...diaries].reverse().map((diary) => (
             <div key={diary.id} className="p-5 border rounded-lg shadow-sm bg-white hover:shadow-md transition">
               
-              {/* ⭐️ タイトル部分と削除ボタンを横並びにするためのレイアウト修正 */}
               <div className="flex justify-between items-start mb-3">
                 <div>
                   <span className="font-bold text-xl block mb-1">{diary.title}</span>
                   <span className="text-sm text-gray-500">{diary.date}</span>
                 </div>
                 
-                {/* ⭐️ 削除ボタン用のミニフォーム */}
                 <form action={removeDiary}>
                   <input type="hidden" name="id" value={diary.id} />
                   <button 

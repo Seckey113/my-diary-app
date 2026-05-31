@@ -73,14 +73,13 @@ export async function getDiaries() {
 }
 
 // 日記の追加（保存時に暗号化する）
-export async function addDiary(title: string, content: string, tags: string) {
+// ⭐️ 引数の先頭に `date: string` を追加します
+export async function addDiary(date: string, title: string, content: string, tags: string) {
   const sheets = await getSheetsClient();
 
   const id = crypto.randomUUID();
-  const date = new Date().toLocaleDateString("ja-JP");
   const now = new Date().toISOString();
 
-  // ⭐️ スプレッドシートに書き込む前に、タイトル、本文、タグを暗号化！
   const encryptedTitle = encrypt(title);
   const encryptedContent = encrypt(content);
   const encryptedTags = encrypt(tags);
@@ -91,6 +90,7 @@ export async function addDiary(title: string, content: string, tags: string) {
     valueInputOption: "USER_ENTERED",
     requestBody: {
       values: [
+        // ⭐️ 自動生成した日付ではなく、画面から受け取った `date` をそのまま保存します
         [id, date, encryptedTitle, encryptedContent, encryptedTags, now, now],
       ],
     },
