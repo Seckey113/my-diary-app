@@ -74,7 +74,7 @@ export function DiaryForm({ clientAction }: { clientAction: (formData: FormData)
           <input
             name="tags"
             type="text"
-            placeholder="タグ（例: 友人, 感謝, 気づき）"
+            placeholder="タグ（例: 友人、感謝、気づき）"
             className="w-full p-3 border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] focus:border-transparent outline-none text-[#555555] transition"
           />
         </div>
