@@ -24,7 +24,10 @@ function decrypt(text: string): string {
   try {
     const textParts = text.split(":");
     const iv = Buffer.from(textParts.shift()!, "hex");
-    const encryptedText = Buffer.from(textParts.join(":"), "hex");
+    
+    // ⭐️ 修正箇所：Buffer.from(...) での変換をやめ、文字列（hex）のまま渡すように変更
+    const encryptedText = textParts.join(":"); 
+    
     const decipher = crypto.createDecipheriv(ALGORITHM, ENCRYPTION_KEY, iv);
     let decrypted = decipher.update(encryptedText, "hex", "utf8");
     decrypted += decipher.final("utf8");
