@@ -33,7 +33,7 @@ export function SearchBar() {
       </div>
       <input
         type="text"
-        placeholder="思い出を検索...（例：アサガオ）"
+        placeholder="思い出を検索...（例：抹茶、取り組み、接心）"
         defaultValue={searchParams?.get("q")?.toString() || ""}
         onChange={(e) => handleSearch(e.target.value)}
         className="w-full pl-10 p-3 bg-white border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] focus:border-transparent outline-none text-[#555555] transition shadow-sm"
