@@ -1,98 +1,126 @@
-import { google } from 'googleapis';
+import { google } from "googleapis";
+import crypto from "crypto"; // Node.js標準の暗号化モジュール
 
-// 1. スプレッドシートに接続するための「鍵」を準備する関数
-export async function getSheetsClient() {
+// ⭐️ 環境変数からパスワードを読み込み、32バイトの強固な暗号鍵を自動生成する
+const ALGORITHM = "aes-256-cbc";
+const PASSWORD = process.env.ENCRYPTION_PASSWORD || "default-fallback-secure-password-string";
+const ENCRYPTION_KEY = crypto.scryptSync(PASSWORD, "salt-string", 32); // 32バイトの鍵に変換
+const IV_LENGTH = 16; // 初期化ベクトル（暗号を毎回ランダムにバラけさせるための調味料）
+
+// 🔒 文字列を暗号化する関数
+function encrypt(text: string): string {
+  if (!text) return "";
+  const iv = crypto.randomBytes(IV_LENGTH);
+  const cipher = crypto.createCipheriv(ALGORITHM, ENCRYPTION_KEY, iv);
+  let encrypted = cipher.update(text, "utf8", "hex");
+  encrypted += cipher.final("hex");
+  // IV（ランダムな値）と暗号文をコロンで繋いで保存する
+  return iv.toString("hex") + ":" + encrypted;
+}
+
+// 🔓 暗号化された文字列を元に戻す（復号化）関数
+function decrypt(text: string): string {
+  if (!text) return "";
+  try {
+    const textParts = text.split(":");
+    const iv = Buffer.from(textParts.shift()!, "hex");
+    const encryptedText = Buffer.from(textParts.join(":"), "hex");
+    const decipher = crypto.createDecipheriv(ALGORITHM, ENCRYPTION_KEY, iv);
+    let decrypted = decipher.update(encryptedText, "hex", "utf8");
+    decrypted += decipher.final("utf8");
+    return decrypted;
+  } catch (error) {
+    // 万が一復号化に失敗した場合（昔の暗号化されていないデータなど）はそのまま返す
+    return text;
+  }
+}
+
+// 認証クライアントの作成
+async function getSheetsClient() {
   const auth = new google.auth.GoogleAuth({
     credentials: {
       client_email: process.env.GOOGLE_CLIENT_EMAIL,
-      // .env.localの改行文字(\n)を正しく読み込むための必須処理
-      private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+      private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
     },
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
   });
-
-  return google.sheets({ version: 'v4', auth });
+  return google.sheets({ version: "v4", auth });
 }
 
-// 2. 日記のデータを全て取得する関数
+// 日記一覧の取得（読み込み時に復号化する）
 export async function getDiaries() {
   const sheets = await getSheetsClient();
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: 'Data!A2:G', // 1行目は見出しなので2行目から取得
+    range: "Data!A2:G",
   });
 
-  const rows = response.data.values;
-  if (!rows) return [];
+  const rows = response.data.values || [];
 
-  // スプレッドシートの行データ（配列）を、プログラムで扱いやすい形（オブジェクト）に変換
   return rows.map((row) => ({
-    id: row[0] || '',
-    date: row[1] || '',
-    title: row[2] || '',
-    content: row[3] || '',
-    tags: row[4] || '',
-    createdAt: row[5] || '',
-    updatedAt: row[6] || '',
+    id: row[0],
+    date: row[1],
+    // ⭐️ 読み込んだ暗号データを、人間の読める日本語に復号化して画面に渡す！
+    title: decrypt(row[2]),
+    content: decrypt(row[3]),
+    tags: decrypt(row[4]),
+    createdAt: row[5],
+    updatedAt: row[6],
   }));
 }
 
-// --- 既存のコードの下にここから追加 ---
-
+// 日記の追加（保存時に暗号化する）
 export async function addDiary(title: string, content: string, tags: string) {
   const sheets = await getSheetsClient();
 
-  // 1. 保存するデータを準備する
-  const id = crypto.randomUUID(); // 重複しないランダムな暗号（ID）を自動生成
-  const date = new Date().toLocaleDateString('ja-JP'); // 今日の日付（YYYY/MM/DD）
-  const now = new Date().toISOString(); // 今の正確な時間
+  const id = crypto.randomUUID();
+  const date = new Date().toLocaleDateString("ja-JP");
+  const now = new Date().toISOString();
 
-  // 2. スプレッドシートの一番下に追記（append）する
+  // ⭐️ スプレッドシートに書き込む前に、タイトル、本文、タグを暗号化！
+  const encryptedTitle = encrypt(title);
+  const encryptedContent = encrypt(content);
+  const encryptedTags = encrypt(tags);
+
   await sheets.spreadsheets.values.append({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: 'Data!A:G', // シート名「Data」のA列〜G列を指定
-    valueInputOption: 'USER_ENTERED', // 人間が手入力したのと同じように保存する設定
+    range: "Data!A:G",
+    valueInputOption: "USER_ENTERED",
     requestBody: {
       values: [
-        [id, date, title, content, tags, now, now] // A列〜G列に入る順番
+        [id, date, encryptedTitle, encryptedContent, encryptedTags, now, now],
       ],
     },
   });
 }
 
-// --- sheets.ts の一番下にここから追加 ---
-
+// 日記の削除（行の再書き込み時にも暗号化を維持する）
 export async function deleteDiary(id: string) {
   const sheets = await getSheetsClient();
-  
-  // 1. 現在の全データを一度取得する
-  const diaries = await getDiaries();
-  
-  // 2. 削除したいID「以外」のデータを抽出して残す（フィルター処理）
-  const remainingDiaries = diaries.filter(diary => diary.id !== id);
-  
-  // 3. 一度スプレッドシートのデータ範囲（2行目以降）を真っさらにクリアする
+  const diaries = await getDiaries(); // ここで取得されるdiariesはすでに「復号化された生データ」
+  const remainingDiaries = diaries.filter((diary) => diary.id !== id);
+
   await sheets.spreadsheets.values.clear({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: 'Data!A2:G',
+    range: "Data!A2:G",
   });
-  
-  // 4. 残ったデータがある場合のみ、再度上から順番に綺麗に書き直す
+
   if (remainingDiaries.length > 0) {
-    const values = remainingDiaries.map(diary => [
+    const values = remainingDiaries.map((diary) => [
       diary.id,
       diary.date,
-      diary.title,
-      diary.content,
-      diary.tags,
+      // ⭐️ 再書き込みする際にもう一度暗号化する
+      encrypt(diary.title),
+      encrypt(diary.content),
+      encrypt(diary.tags),
       diary.createdAt,
-      new Date().toISOString() // 更新日時を上書き
+      new Date().toISOString(),
     ]);
-    
+
     await sheets.spreadsheets.values.update({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: 'Data!A2',
-      valueInputOption: 'USER_ENTERED',
+      range: "Data!A2",
+      valueInputOption: "USER_ENTERED",
       requestBody: { values },
     });
   }
