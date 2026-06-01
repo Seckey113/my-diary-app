@@ -128,3 +128,39 @@ export async function deleteDiary(id: string) {
     });
   }
 }
+
+// ⭐️ 新しく追加する更新用の関数
+export async function updateDiary(id: string, date: string, title: string, content: string, tags: string) {
+  const sheets = await getSheetsClient();
+  
+  // まずは全データを取得して、更新したい日記の「行番号」を見つけます
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: process.env.GOOGLE_SHEET_ID,
+    range: "Data!A:A", // IDの列だけ取得
+  });
+  
+  const rows = response.data.values;
+  if (!rows) return;
+
+  const rowIndex = rows.findIndex((row) => row[0] === id);
+  if (rowIndex === -1) return;
+
+  const rowNumber = rowIndex + 1; // スプレッドシートの行番号は1から始まるため
+
+  // 暗号化してセキュリティを保ったまま上書き
+  const encryptedTitle = encrypt(title);
+  const encryptedContent = encrypt(content);
+  const encryptedTags = encrypt(tags);
+
+  // 見つけた行のB列（日付）〜E列（タグ）を上書きします
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: process.env.GOOGLE_SHEET_ID,
+    range: `Data!B${rowNumber}:E${rowNumber}`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: {
+      values: [
+        [date, encryptedTitle, encryptedContent, encryptedTags],
+      ],
+    },
+  });
+}

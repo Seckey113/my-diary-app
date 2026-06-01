@@ -1,32 +1,12 @@
-import { getDiaries, addDiary, deleteDiary } from "./lib/sheets";
+import { getDiaries, addDiary, deleteDiary, updateDiary } from "./lib/sheets"; // ⭐️ updateDiaryを追加
 import { revalidatePath } from "next/cache";
 import { DiaryForm } from "./form";
 import { SearchBar } from "./search-bar";
+import { DiaryCard } from "./diary-card"; // ⭐️ 新しく作った部品を読み込む
 
-// ⭐️ 検索キーワードを黄色くハイライトする専用の部品（空欄の時の安全策を追加）
-function Highlight({ text, query }: { text?: string; query: string }) {
-  if (!text) return null;
-  if (!query) return <>{text}</>;
-  
-  const parts = text.split(new RegExp(`(${query})`, 'gi'));
-  return (
-    <>
-      {parts.map((part, i) =>
-        part.toLowerCase() === query.toLowerCase() ? (
-          <span key={i} className="bg-yellow-200 text-gray-900 px-1 rounded-sm">{part}</span>
-        ) : (
-          part
-        )
-      )}
-    </>
-  );
-}
-
-// ⭐️ Next.js 15 対応：searchParams を「Promise（非同期）」として受け取る
 export default async function Home({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const diaries = await getDiaries();
   
-  // ⭐️ await を使って、URLからキーワードを確実に取りこぼさず受け取る
   const resolvedParams = await searchParams;
   const searchQuery = resolvedParams.q || "";
 
@@ -47,6 +27,25 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
     revalidatePath("/");
   }
 
+  // ⭐️ 新しく追加した「編集・更新」の処理（Server Action）
+  async function editDiary(formData: FormData) {
+    "use server";
+    const id = formData.get("id") as string;
+    const dateInput = formData.get("date") as string;
+    const title = formData.get("title") as string;
+    const content = formData.get("content") as string;
+    const tags = formData.get("tags") as string;
+
+    if (!id || !title || !content) return;
+
+    const date = dateInput
+      ? new Date(dateInput).toLocaleDateString("ja-JP")
+      : new Date().toLocaleDateString("ja-JP");
+
+    await updateDiary(id, date, title, content, tags);
+    revalidatePath("/");
+  }
+
   async function removeDiary(formData: FormData) {
     "use server";
     const id = formData.get("id") as string;
@@ -60,7 +59,6 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
     if (!searchQuery) return true;
     const lowerQuery = searchQuery.toLowerCase();
     
-    // ⭐️ タグなどが空欄だった場合のエラーを防ぐ安全策
     const safeTitle = diary.title || "";
     const safeContent = diary.content || "";
     const safeTags = diary.tags || "";
@@ -127,35 +125,14 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
                       
                       <div className="p-4 space-y-5 bg-white">
                         {groupedDiaries[year][month].map((diary) => (
-                          <div key={diary.id} className="p-6 border border-[#EBE8E0] rounded-2xl shadow-sm bg-white hover:shadow-md transition duration-300">
-                            <div className="flex justify-between items-start mb-5">
-                              <div>
-                                <span className="font-bold text-xl block mb-1 text-[#333333]">
-                                  <Highlight text={diary.title} query={searchQuery} />
-                                </span>
-                                <span className="text-sm text-[#8FA391] font-medium">{diary.date}</span>
-                              </div>
-                              <form action={removeDiary}>
-                                <input type="hidden" name="id" value={diary.id} />
-                                <button 
-                                  type="submit" 
-                                  className="text-[#D98C8C] hover:text-[#C57676] text-sm font-medium border border-[#F2D6D6] hover:border-[#E8BDBD] rounded-lg px-3 py-1.5 transition bg-[#FDF5F5] hover:bg-[#FAF0F0]"
-                                >
-                                  削除
-                                </button>
-                              </form>
-                            </div>
-                            <p className="text-[#555555] whitespace-pre-wrap leading-relaxed tracking-wide">
-                              <Highlight text={diary.content} query={searchQuery} />
-                            </p>
-                            {diary.tags && (
-                              <div className="mt-6">
-                                <span className="inline-block bg-[#F0F2EF] text-[#6B7D6C] text-xs px-3.5 py-1.5 rounded-full font-medium tracking-wide">
-                                  <Highlight text={diary.tags} query={searchQuery} />
-                                </span>
-                              </div>
-                            )}
-                          </div>
+                          /* ⭐️ 新しく作った DiaryCard コンポーネントに置き換え！ */
+                          <DiaryCard 
+                            key={diary.id} 
+                            diary={diary} 
+                            searchQuery={searchQuery} 
+                            onUpdate={editDiary} 
+                            onDelete={removeDiary} 
+                          />
                         ))}
                       </div>
                     </details>
