@@ -1,8 +1,34 @@
-import { getDiaries, addDiary, deleteDiary, updateDiary } from "./lib/sheets"; // ⭐️ updateDiaryを追加
+import { getDiaries, addDiary, deleteDiary, updateDiary } from "./lib/sheets";
 import { revalidatePath } from "next/cache";
 import { DiaryForm } from "./form";
 import { SearchBar } from "./search-bar";
-import { DiaryCard } from "./diary-card"; // ⭐️ 新しく作った部品を読み込む
+import { DiaryCard } from "./diary-card";
+
+// ⭐️ 改良版：URLや小数の「意味のある記号」は守る賢い変換ツール
+function formatPunctuation(text: string) {
+  if (!text) return "";
+
+  const placeholders: string[] = [];
+  
+  // 1. URL、ファイル名、小数、桁区切り（例: google.com, 3.14, 1,000, image.png）など
+  // 「英数字やハイフンなどに挟まれた半角カンマ・ピリオドの塊」を見つけて一時的に退避
+  let tempText = text.replace(/[a-zA-Z0-9\-_]+(?:[.,][a-zA-Z0-9\-_]+)+/g, (match) => {
+    placeholders.push(match);
+    return `__PLACEHOLDER_${placeholders.length - 1}__`;
+  });
+
+  // 2. 残っているすべてのカンマとピリオド（全角・半角）を日本語の句読点に一斉変換
+  tempText = tempText
+    .replace(/[,，]/g, "、")
+    .replace(/[\.．]/g, "。");
+
+  // 3. 退避しておいた英数字の塊を安全に元の場所に戻す
+  placeholders.forEach((placeholder, index) => {
+    tempText = tempText.replace(`__PLACEHOLDER_${index}__`, () => placeholder);
+  });
+
+  return tempText;
+}
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const diaries = await getDiaries();
@@ -13,9 +39,11 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
   async function createDiary(formData: FormData) {
     "use server";
     const dateInput = formData.get("date") as string;
-    const title = formData.get("title") as string;
-    const content = formData.get("content") as string;
-    const tags = formData.get("tags") as string;
+    
+    // ⭐️ 保存する前に、取得したテキストを変換ツールに通す
+    const title = formatPunctuation(formData.get("title") as string);
+    const content = formatPunctuation(formData.get("content") as string);
+    const tags = formatPunctuation(formData.get("tags") as string);
 
     if (!title || !content) return;
 
@@ -27,14 +55,15 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
     revalidatePath("/");
   }
 
-  // ⭐️ 新しく追加した「編集・更新」の処理（Server Action）
   async function editDiary(formData: FormData) {
     "use server";
     const id = formData.get("id") as string;
     const dateInput = formData.get("date") as string;
-    const title = formData.get("title") as string;
-    const content = formData.get("content") as string;
-    const tags = formData.get("tags") as string;
+    
+    // ⭐️ 編集して上書きする時も、変換ツールに通す
+    const title = formatPunctuation(formData.get("title") as string);
+    const content = formatPunctuation(formData.get("content") as string);
+    const tags = formatPunctuation(formData.get("tags") as string);
 
     if (!id || !title || !content) return;
 
@@ -125,7 +154,6 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
                       
                       <div className="p-4 space-y-5 bg-white">
                         {groupedDiaries[year][month].map((diary) => (
-                          /* ⭐️ 新しく作った DiaryCard コンポーネントに置き換え！ */
                           <DiaryCard 
                             key={diary.id} 
                             diary={diary} 
