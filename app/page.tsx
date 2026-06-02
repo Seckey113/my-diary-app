@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { DiaryForm } from "./form";
 import { SearchBar } from "./search-bar";
 import { DiaryCard } from "./diary-card";
+import { RefreshButton } from "./refresh-button"; // ⭐️ これを追加！
 
 // URLや小数の「意味のある記号」は守る賢い変換ツール
 function formatPunctuation(text: string) {
@@ -114,7 +115,11 @@ const date = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${
       style={{ fontFamily: '"Hiragino Maru Gothic ProN", "ヒラギノ丸ゴ ProN", "Zen Maru Gothic", sans-serif' }}
     >
       <main className="max-w-2xl mx-auto">
-        <h1 className="text-3xl font-bold text-[#8FA391] mb-10 tracking-wider">My Diary!!</h1>
+        {/* ⭐️ タイトルと更新ボタンを横並びにする */}
+        <div className="flex justify-between items-center mb-10">
+          <h1 className="text-3xl font-bold text-[#8FA391] tracking-wider">My Diary!!</h1>
+          <RefreshButton />
+        </div>
 
         <DiaryForm clientAction={createDiary} />
         <SearchBar />
