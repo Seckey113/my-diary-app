@@ -62,13 +62,14 @@ export function DiaryForm({ clientAction }: { clientAction: (formData: FormData)
         <label className="block text-[13px] text-[#8C8276] font-bold mb-1">
           日付（未選択の場合は今日になります）
         </label>
-        {/* ⭐️ スマホのはみ出し防止： block, max-w-full, m-0, box-border, text-base を追加！ */}
+        {/* ⭐️ iOS Safariのはみ出し完全防止（最強の呪い解除） */}
         <input
           type="date"
           name="date"
           value={date}
           onChange={(e) => setDate(e.target.value)}
-          className="block w-full max-w-full m-0 box-border p-3 bg-[#FCF9F2] border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] focus:border-transparent outline-none text-[#4A4A4A] text-base transition"
+          style={{ WebkitAppearance: "none" }} // 👈 Appleの独自デザインを完全に無効化！
+          className="appearance-none min-w-0 block w-full max-w-full m-0 box-border px-2 py-3 bg-[#FCF9F2] border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] focus:border-transparent outline-none text-[#4A4A4A] text-base transition"
         />
       </div>
 
