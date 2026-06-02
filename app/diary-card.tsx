@@ -13,7 +13,7 @@ function formatDateForInput(dateStr: string) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-// ハイライト用の部品（page.tsxからこちらにお引っ越し）
+// ハイライト用の部品
 export function Highlight({ text, query }: { text?: string; query: string }) {
   if (!text) return null;
   if (!query) return <>{text}</>;
@@ -46,6 +46,9 @@ export function DiaryCard({
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isPending, startTransition] = useTransition();
+  
+  // ⭐️ 新規追加：文章が開いているか（全文表示か）どうかを記憶する変数
+  const [isExpanded, setIsExpanded] = useState(false);
 
   // 📝 編集モードの時の画面
   if (isEditing) {
@@ -53,8 +56,8 @@ export function DiaryCard({
       <div className="p-6 sm:p-8 border-2 border-[#8FA391] rounded-2xl shadow-md bg-[#F9FBF9] transition duration-300">
         <form action={(formData) => {
           startTransition(async () => {
-            await onUpdate(formData); // 裏側の更新処理を実行
-            setIsEditing(false); // 保存が終わったら表示モードに戻す
+            await onUpdate(formData);
+            setIsEditing(false);
           });
         }} className="space-y-4">
           <input type="hidden" name="id" value={diary.id} />
@@ -103,7 +106,6 @@ export function DiaryCard({
           <span className="text-sm text-[#8FA391] font-medium">{diary.date}</span>
         </div>
         <div className="flex gap-2">
-          {/* ⭐️ 編集ボタン */}
           <button type="button" onClick={() => setIsEditing(true)} className="text-[#8FA391] hover:text-[#7C907E] text-sm font-medium border border-[#EBE8E0] hover:border-[#8FA391] rounded-lg px-3 py-1.5 transition bg-[#F9FBF9] hover:bg-[#F0F4F0]">
             編集
           </button>
@@ -116,9 +118,22 @@ export function DiaryCard({
           </form>
         </div>
       </div>
-      <p className="text-[#555555] whitespace-pre-wrap leading-relaxed tracking-wide">
-        <Highlight text={diary.content} query={searchQuery} />
-      </p>
+      
+      {/* ⭐️ 本文エリア（クリックで開閉するように変更） */}
+      <div 
+        onClick={() => setIsExpanded(!isExpanded)} 
+        className="cursor-pointer group"
+      >
+        <p className={`text-[#555555] whitespace-pre-wrap leading-relaxed tracking-wide transition-all ${isExpanded ? "" : "line-clamp-3"}`}>
+          <Highlight text={diary.content} query={searchQuery} />
+        </p>
+        
+        {/* 展開/折りたたみのヒント */}
+        <div className="mt-2 text-sm text-[#A3B5A5] font-medium group-hover:text-[#8FA391] transition">
+          {isExpanded ? "▲ 閉じる" : "▼ 続きを読む"}
+        </div>
+      </div>
+      
       {diary.tags && (
         <div className="mt-6">
           <span className="inline-block bg-[#F0F2EF] text-[#6B7D6C] text-xs px-3.5 py-1.5 rounded-full font-medium tracking-wide">
