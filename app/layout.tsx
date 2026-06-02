@@ -25,10 +25,11 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased bg-[#EBE8E0]`}
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        {/* ⭐️ アプリ全体を引っ張り更新機能で包み込む！ */}
+        {/* ⭐️ ここに {children} が無いと画面が真っ暗になります！ */}
+        {children}
       </body>
     </html>
   );

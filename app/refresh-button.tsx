@@ -24,7 +24,7 @@ export function RefreshButton() {
       <span className={`text-base leading-none ${isRefreshing ? "animate-spin" : ""}`}>
         ↻
       </span>
-      {isRefreshing ? "更新中..." : "最新に更新"}
+      {isRefreshing ? "更新中..." : "更新"}
     </button>
   );
 }
