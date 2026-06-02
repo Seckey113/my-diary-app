@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next"; // ⭐️ Viewport を追加
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
