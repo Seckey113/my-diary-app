@@ -17,6 +17,11 @@ export const metadata: Metadata = {
   description: "私だけにしか綴れない体験記",
 };
 
+// ⭐️ 新規追加：iPhoneのステータスバーやフチの色をアプリと一体化させる！
+export const viewport: Viewport = {
+  themeColor: "#FAF9F6",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{

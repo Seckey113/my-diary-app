@@ -1,8 +1,9 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* ⭐️ アプリの背景色と同じ色に設定 */
+  --background: #FAF9F6; 
+  --foreground: #4A4A4A;
 }
 
 @theme inline {
@@ -14,8 +15,9 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    /* ⭐️ ダークモード時も、裏地が真っ暗にならないように同じ色で固定 */
+    --background: #FAF9F6;
+    --foreground: #4A4A4A;
   }
 }
 
