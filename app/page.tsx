@@ -32,7 +32,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
     const content = formatPunctuation(formData.get("content") as string);
     const tags = formatPunctuation(formData.get("tags") as string);
     if (!title || !content) return;
-    const date = dateInput ? new Date(dateInput).toLocaleDateString("ja-JP") : new Date().toLocaleDateString("ja-JP");
+    const d = dateInput ? new Date(dateInput) : new Date();
+const date = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
     await addDiary(date, title, content, tags);
     revalidatePath("/");
   }
@@ -45,7 +46,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
     const content = formatPunctuation(formData.get("content") as string);
     const tags = formatPunctuation(formData.get("tags") as string);
     if (!id || !title || !content) return;
-    const date = dateInput ? new Date(dateInput).toLocaleDateString("ja-JP") : new Date().toLocaleDateString("ja-JP");
+    const d = dateInput ? new Date(dateInput) : new Date();
+const date = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
     await updateDiary(id, date, title, content, tags);
     revalidatePath("/");
   }

@@ -13,7 +13,17 @@ function formatDateForInput(dateStr: string) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-// ハイライト用の部品
+// ⭐️ 提案1：日付を綺麗にゼロ埋め（2026/06/01）にするための専用ツール
+function formatToZeroPadding(dateStr: string) {
+  if (!dateStr) return "";
+  const parts = dateStr.split("/");
+  if (parts.length === 3) {
+    const [year, month, day] = parts;
+    return `${year}/${month.padStart(2, '0')}/${day.padStart(2, '0')}`;
+  }
+  return dateStr;
+}
+
 export function Highlight({ text, query }: { text?: string; query: string }) {
   if (!text) return null;
   if (!query) return <>{text}</>;
@@ -32,7 +42,6 @@ export function Highlight({ text, query }: { text?: string; query: string }) {
   );
 }
 
-// ⭐️ 日記カード本体の部品
 export function DiaryCard({ 
   diary, 
   searchQuery, 
@@ -46,11 +55,8 @@ export function DiaryCard({
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isPending, startTransition] = useTransition();
-  
-  // ⭐️ 新規追加：文章が開いているか（全文表示か）どうかを記憶する変数
   const [isExpanded, setIsExpanded] = useState(false);
 
-  // 📝 編集モードの時の画面
   if (isEditing) {
     return (
       <div className="p-6 sm:p-8 border-2 border-[#8FA391] rounded-2xl shadow-md bg-[#F9FBF9] transition duration-300">
@@ -95,21 +101,28 @@ export function DiaryCard({
     );
   }
 
-  // 📖 通常の表示モードの画面
   return (
     <div className="p-6 border border-[#EBE8E0] rounded-2xl shadow-sm bg-white hover:shadow-md transition duration-300">
-      <div className="flex justify-between items-start mb-5">
-        <div>
-          <span className="font-bold text-xl block mb-1 text-[#333333]">
+      
+      {/* ⭐️ 提案2：スマホでは縦並び(flex-col)、PCでは横並び(sm:flex-row)にして余白を確保 */}
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-5 gap-4">
+        
+        {/* タイトルと日付エリア（横幅をたっぷり使う） */}
+        <div className="w-full">
+          <span className="font-bold text-xl block mb-1 text-[#333333] break-words">
             <Highlight text={diary.title} query={searchQuery} />
           </span>
-          <span className="text-sm text-[#8FA391] font-medium">{diary.date}</span>
+          {/* ⭐️ 提案1：日付表示を formatToZeroPadding 関数に通して綺麗にする */}
+          <span className="text-sm text-[#8FA391] font-medium">
+            {formatToZeroPadding(diary.date)}
+          </span>
         </div>
-        <div className="flex gap-2">
+
+        {/* ⭐️ ボタンエリア：絶対に押し潰されない(shrink-0)、スマホでは右寄せ(self-end) */}
+        <div className="flex gap-2 shrink-0 self-end sm:self-start">
           <button type="button" onClick={() => setIsEditing(true)} className="text-[#8FA391] hover:text-[#7C907E] text-sm font-medium border border-[#EBE8E0] hover:border-[#8FA391] rounded-lg px-3 py-1.5 transition bg-[#F9FBF9] hover:bg-[#F0F4F0]">
             編集
           </button>
-
           <form action={onDelete}>
             <input type="hidden" name="id" value={diary.id} />
             <button type="submit" className="text-[#D98C8C] hover:text-[#C57676] text-sm font-medium border border-[#F2D6D6] hover:border-[#E8BDBD] rounded-lg px-3 py-1.5 transition bg-[#FDF5F5] hover:bg-[#FAF0F0]">
@@ -119,7 +132,6 @@ export function DiaryCard({
         </div>
       </div>
       
-      {/* ⭐️ 本文エリア（クリックで開閉するように変更） */}
       <div 
         onClick={() => setIsExpanded(!isExpanded)} 
         className="cursor-pointer group"
@@ -127,8 +139,6 @@ export function DiaryCard({
         <p className={`text-[#555555] whitespace-pre-wrap leading-relaxed tracking-wide transition-all ${isExpanded ? "" : "line-clamp-3"}`}>
           <Highlight text={diary.content} query={searchQuery} />
         </p>
-        
-        {/* 展開/折りたたみのヒント */}
         <div className="mt-2 text-sm text-[#A3B5A5] font-medium group-hover:text-[#8FA391] transition">
           {isExpanded ? "▲ 閉じる" : "▼ 続きを読む"}
         </div>
