@@ -18,13 +18,11 @@ function SubmitButton() {
 }
 
 export function DiaryForm({ clientAction }: { clientAction: (formData: FormData) => Promise<any> }) {
-  // 1. 入力状態を管理する変数（ステート）
   const [date, setDate] = useState("");
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [tags, setTags] = useState("");
 
-  // 2. 画面が開いた時（マウント時）に、ブラウザの記憶（localStorage）から前回の書きかけを読み込む
   useEffect(() => {
     setDate(localStorage.getItem("draft-date") || "");
     setTitle(localStorage.getItem("draft-title") || "");
@@ -32,7 +30,6 @@ export function DiaryForm({ clientAction }: { clientAction: (formData: FormData)
     setTags(localStorage.getItem("draft-tags") || "");
   }, []);
 
-  // 3. 1文字でも入力内容が変わるたびに、ブラウザの記憶に自動保存する
   useEffect(() => {
     localStorage.setItem("draft-date", date);
     localStorage.setItem("draft-title", title);
@@ -41,10 +38,8 @@ export function DiaryForm({ clientAction }: { clientAction: (formData: FormData)
   }, [date, title, content, tags]);
 
   const [, formAction] = useActionState(async (prevState: any, formData: FormData) => {
-    // 実際にバックエンド（スプレッドシート等）にデータを送信
     await clientAction(formData);
 
-    // 4. 保存が成功したら、入力欄とブラウザの記憶を空っぽ（リセット）にする
     setDate("");
     setTitle("");
     setContent("");
@@ -67,12 +62,13 @@ export function DiaryForm({ clientAction }: { clientAction: (formData: FormData)
         <label className="block text-[13px] text-[#8C8276] font-bold mb-1">
           日付（未選択の場合は今日になります）
         </label>
+        {/* ⭐️ スマホのはみ出し防止： block, max-w-full, m-0, box-border, text-base を追加！ */}
         <input
           type="date"
           name="date"
           value={date}
           onChange={(e) => setDate(e.target.value)}
-          className="w-full p-3 bg-[#FCF9F2] border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] focus:border-transparent outline-none text-[#4A4A4A] transition"
+          className="block w-full max-w-full m-0 box-border p-3 bg-[#FCF9F2] border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] focus:border-transparent outline-none text-[#4A4A4A] text-base transition"
         />
       </div>
 
@@ -86,7 +82,7 @@ export function DiaryForm({ clientAction }: { clientAction: (formData: FormData)
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="今日の出来事を一言で..."
-          className="w-full p-3 bg-[#FCF9F2] border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] focus:border-transparent outline-none text-[#4A4A4A] transition"
+          className="block w-full max-w-full m-0 box-border p-3 bg-[#FCF9F2] border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] focus:border-transparent outline-none text-[#4A4A4A] text-base transition"
         />
       </div>
 
@@ -100,7 +96,7 @@ export function DiaryForm({ clientAction }: { clientAction: (formData: FormData)
           onChange={(e) => setContent(e.target.value)}
           placeholder="今日あったこと、考えたこと..."
           rows={5}
-          className="w-full p-3 bg-[#FCF9F2] border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] focus:border-transparent outline-none text-[#4A4A4A] transition resize-y"
+          className="block w-full max-w-full m-0 box-border p-3 bg-[#FCF9F2] border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] focus:border-transparent outline-none text-[#4A4A4A] text-base transition resize-y"
         ></textarea>
       </div>
 
@@ -114,7 +110,7 @@ export function DiaryForm({ clientAction }: { clientAction: (formData: FormData)
           value={tags}
           onChange={(e) => setTags(e.target.value)}
           placeholder="カンマ（、）区切りで入力"
-          className="w-full p-3 bg-[#FCF9F2] border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] focus:border-transparent outline-none text-[#4A4A4A] transition"
+          className="block w-full max-w-full m-0 box-border p-3 bg-[#FCF9F2] border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] focus:border-transparent outline-none text-[#4A4A4A] text-base transition"
         />
       </div>
 
