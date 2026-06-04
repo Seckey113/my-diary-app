@@ -1,9 +1,12 @@
-import { getDiaries, addDiary, deleteDiary, updateDiary, restoreDiary, permanentlyDeleteDiary } from "./lib/sheets"; // ⭐️ 新機能2つを読み込みに追加
+import { getDiaries, addDiary, deleteDiary, updateDiary, restoreDiary, permanentlyDeleteDiary } from "./lib/sheets";
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers"; // ⭐️ Cookieを読み込む機能を追加
 import { DiaryForm } from "./form";
 import { SearchBar } from "./search-bar";
 import { DiaryCard } from "./diary-card";
-import { RefreshButton } from "./refresh-button"; // ⭐️ これを追加！
+import { RefreshButton } from "./refresh-button";
+import { LoginForm } from "./login-form"; // ⭐️ 追加
+import { LogoutButton } from "./logout-button"; // ⭐️ 追加
 
 // URLや小数の「意味のある記号」は守る賢い変換ツール
 function formatPunctuation(text: string) {
@@ -21,6 +24,23 @@ function formatPunctuation(text: string) {
 }
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+  // ⭐️ 門番システム：許可証（Cookie）を持っているかチェック！
+  const cookieStore = await cookies();
+  const authCookie = cookieStore.get("diary_auth");
+
+  // 許可証がない、または間違っている場合は、ここで処理を強制ストップしてログイン画面を出す
+  if (!authCookie || authCookie.value !== "authenticated") {
+    return (
+      <div 
+        className="min-h-screen bg-[#FAF9F6] flex flex-col justify-center px-4 sm:px-8"
+        style={{ fontFamily: '"Hiragino Maru Gothic ProN", "ヒラギノ丸ゴ ProN", "Zen Maru Gothic", sans-serif' }}
+      >
+        <LoginForm />
+      </div>
+    );
+  }
+
+  // 👇 ここから下は許可証を持った人しか絶対に入れません（スプレッドシートの読み込み開始）
   const diaries = await getDiaries();
   
   const resolvedParams = await searchParams;
@@ -137,10 +157,15 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
       style={{ fontFamily: '"Hiragino Maru Gothic ProN", "ヒラギノ丸ゴ ProN", "Zen Maru Gothic", sans-serif' }}
     >
       <main className="max-w-2xl mx-auto">
-        {/* ⭐️ タイトルと更新ボタンを横並びにする */}
+        {/* ⭐️ タイトルとボタンたちを横並びにする */}
         <div className="flex justify-between items-center mb-10">
           <h1 className="text-3xl font-bold text-[#8FA391] tracking-wider">My Diary!!</h1>
-          <RefreshButton />
+          
+          {/* ⭐️ ロックボタンと更新ボタンを右側に並べる */}
+          <div className="flex items-center gap-1">
+            <LogoutButton />
+            <RefreshButton />
+          </div>
         </div>
 
         <DiaryForm clientAction={createDiary} />
