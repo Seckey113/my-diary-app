@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+// ⭐️ 高さを測るためのツール（useRef, useEffect）を追加
+import { useState, useTransition, useRef, useEffect } from "react";
 
 function formatDateForInput(dateStr: string) {
   if (!dateStr) return "";
@@ -55,10 +56,23 @@ export function DiaryCard({
   const [isPending, startTransition] = useTransition();
   const [isExpanded, setIsExpanded] = useState(false);
 
-  // ⭐️ 判定用の変数を用意（isNoTags を追加）
+  // ⭐️ 新規追加：文章がはみ出しているかどうかを判定するための変数
+  const contentRef = useRef<HTMLParagraphElement>(null);
+  const [isOverflowing, setIsOverflowing] = useState(false);
+
   const isNoTitle = diary.title === "無題";
   const isNoContent = diary.content === "エピソード記録なし";
   const isNoTags = diary.tags === "タグなし";
+
+  // ⭐️ 新規追加：画面に表示された直後に、文章の高さを自動チェックする
+  useEffect(() => {
+    const el = contentRef.current;
+    if (el) {
+      // 「本来の文章の高さ(scrollHeight)」が「3行分に制限された高さ(clientHeight)」を
+      // 超えていれば、はみ出している（＝長文である）と判定する！
+      setIsOverflowing(el.scrollHeight > el.clientHeight);
+    }
+  }, [diary.content]);
 
   if (isEditing) {
     return (
@@ -78,17 +92,14 @@ export function DiaryCard({
 
           <div>
             <label className="block text-xs font-medium text-[#888888] mb-1">タイトル</label>
-            {/* ⭐️ 「無題」の場合は入力欄を空っぽにしてあげる気配り */}
             <input type="text" name="title" defaultValue={isNoTitle ? "" : diary.title} placeholder="無題" className="w-full p-2.5 border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] outline-none text-[#333333] bg-white" />
           </div>
 
           <div>
             <label className="block text-xs font-medium text-[#888888] mb-1">エピソード</label>
-            {/* ⭐️ 「エピソード記録なし」の場合は入力欄を空っぽにしてあげる気配り */}
             <textarea name="content" defaultValue={isNoContent ? "" : diary.content} placeholder="エピソード記録なし" rows={5} className="w-full p-2.5 border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] outline-none text-[#333333] resize-none bg-white" />
           </div>
 
-          {/* ⭐️ 「タグなし」の場合は入力欄を空っぽにしてあげる */}
           <div>
             <label className="block text-xs font-medium text-[#888888] mb-1">タグ</label>
             <input type="text" name="tags" defaultValue={isNoTags ? "" : diary.tags} placeholder="タグなし" className="w-full p-2.5 border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] outline-none text-[#555555] bg-white" />
@@ -112,7 +123,6 @@ export function DiaryCard({
       
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-5 gap-4">
         <div className="w-full">
-          {/* ⭐️ 「無題」の時は文字を薄くして斜体にする */}
           <span className={`text-xl block mb-1 break-words ${isNoTitle ? "text-[#B0B0B0] italic font-medium" : "text-[#333333] font-bold"}`}>
             <Highlight text={diary.title} query={searchQuery} />
           </span>
@@ -134,25 +144,27 @@ export function DiaryCard({
         </div>
       </div>
       
-      {/* ⭐️ エピソードが無い時はクリック判定自体を無くす */}
+      {/* ⭐️ クリック判定の条件に「isOverflowing (はみ出しているか)」を追加 */}
       <div 
-        onClick={() => !isNoContent && setIsExpanded(!isExpanded)} 
-        className={`${!isNoContent ? "cursor-pointer group" : ""}`}
+        onClick={() => !isNoContent && isOverflowing && setIsExpanded(!isExpanded)} 
+        className={`${!isNoContent && isOverflowing ? "cursor-pointer group" : ""}`}
       >
-        {/* ⭐️ 「エピソード記録なし」の時は文字を薄くして斜体にする */}
-        <p className={`whitespace-pre-wrap leading-relaxed tracking-wide transition-all ${isExpanded ? "" : "line-clamp-3"} ${isNoContent ? "text-[#B0B0B0] italic text-sm" : "text-[#555555]"}`}>
+        {/* ⭐️ ref={contentRef} を付けて、システムがこの段落の高さを測れるようにする */}
+        <p 
+          ref={contentRef}
+          className={`whitespace-pre-wrap leading-relaxed tracking-wide transition-all ${isExpanded ? "" : "line-clamp-3"} ${isNoContent ? "text-[#B0B0B0] italic text-sm" : "text-[#555555]"}`}
+        >
           <Highlight text={diary.content} query={searchQuery} />
         </p>
         
-        {/* ⭐️ エピソードが無い時は「▼ 続きを読む」を隠す */}
-        {!isNoContent && (
+        {/* ⭐️ 「エピソードがあり」かつ「3行を超えている長文」の時だけボタンを表示 */}
+        {!isNoContent && isOverflowing && (
           <div className="mt-2 text-sm text-[#A3B5A5] font-medium group-hover:text-[#8FA391] transition">
             {isExpanded ? "▲ 閉じる" : "▼ 続きを読む"}
           </div>
         )}
       </div>
       
-      {/* ⭐️ 「タグなし」の時は背景を白にして、文字を薄いグレー＆斜体にする */}
       {diary.tags && (
         <div className="mt-6">
           <span className={`inline-block text-xs px-3.5 py-1.5 rounded-full font-medium tracking-wide ${isNoTags ? "bg-white border border-[#EBE8E0] text-[#B0B0B0] italic" : "bg-[#F0F2EF] text-[#6B7D6C]"}`}>
