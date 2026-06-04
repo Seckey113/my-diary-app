@@ -75,12 +75,12 @@ export function DiaryCard({
 
           <div>
             <label className="block text-xs font-medium text-[#888888] mb-1">タイトル</label>
-            <input type="text" name="title" defaultValue={diary.title} className="w-full p-2.5 border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] outline-none text-[#333333] bg-white" required />
+            <input type="text" name="title" defaultValue={diary.title} className="w-full p-2.5 border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] outline-none text-[#333333] bg-white" />
           </div>
 
           <div>
             <label className="block text-xs font-medium text-[#888888] mb-1">本文</label>
-            <textarea name="content" defaultValue={diary.content} rows={5} className="w-full p-2.5 border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] outline-none text-[#333333] resize-none bg-white" required />
+            <textarea name="content" defaultValue={diary.content} rows={5} className="w-full p-2.5 border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] outline-none text-[#333333] resize-none bg-white" />
           </div>
 
           <div>
