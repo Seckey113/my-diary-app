@@ -29,16 +29,18 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
   async function createDiary(formData: FormData) {
     "use server";
     const dateInput = formData.get("date") as string;
-    // 一度rawTitleとして受け取る
     const rawTitle = formatPunctuation(formData.get("title") as string);
-    const content = formatPunctuation(formData.get("content") as string);
-    const tags = formatPunctuation(formData.get("tags") as string);
+    const rawContent = formatPunctuation(formData.get("content") as string);
+    // 💡 1. タグも一度 rawTags として受け取る
+    const rawTags = formatPunctuation(formData.get("tags") as string);
     
-    // 💡 修正1：タイトルが空っぽの場合は自動的に「無題」とする
     const title = rawTitle.trim() === "" ? "無題" : rawTitle;
+    const content = rawContent.trim() === "" ? "エピソード記録なし" : rawContent;
+    // 💡 2. タグが空っぽなら「タグなし」にする
+    const tags = rawTags.trim() === "" ? "タグなし" : rawTags;
 
-    // 💡 修正2：タイトルもエピソードも「両方」完全に空っぽの時だけは保存しない
-    if (title === "無題" && content.trim() === "") return;
+    // 💡 3. すべてが自動入力の文字になった時だけ保存をキャンセル
+    if (title === "無題" && content === "エピソード記録なし" && tags === "タグなし") return;
 
     const d = dateInput ? new Date(dateInput) : new Date();
     const date = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
@@ -51,18 +53,20 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
     "use server";
     const id = formData.get("id") as string;
     const dateInput = formData.get("date") as string;
-    // 一度rawTitleとして受け取る
     const rawTitle = formatPunctuation(formData.get("title") as string);
-    const content = formatPunctuation(formData.get("content") as string);
-    const tags = formatPunctuation(formData.get("tags") as string);
+    const rawContent = formatPunctuation(formData.get("content") as string);
+    // 💡 こちらも同様に rawTags として受け取る
+    const rawTags = formatPunctuation(formData.get("tags") as string);
     
     if (!id) return;
 
-    // 💡 編集時も同じく、タイトルが空っぽの場合は自動的に「無題」とする
     const title = rawTitle.trim() === "" ? "無題" : rawTitle;
+    const content = rawContent.trim() === "" ? "エピソード記録なし" : rawContent;
+    // 💡 編集時も空っぽなら「タグなし」にする
+    const tags = rawTags.trim() === "" ? "タグなし" : rawTags;
 
-    // 💡 両方完全に空っぽの時だけは更新しない
-    if (title === "無題" && content.trim() === "") return;
+    // 💡 すべてが自動入力の文字になった時だけ更新しない
+    if (title === "無題" && content === "エピソード記録なし" && tags === "タグなし") return;
 
     const d = dateInput ? new Date(dateInput) : new Date();
     const date = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;

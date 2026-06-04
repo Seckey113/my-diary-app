@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from "react";
 
-// 日付文字列("2026/5/26")をカレンダー入力用("2026-05-26")に変換する補助ツール
 function formatDateForInput(dateStr: string) {
   if (!dateStr) return "";
   const d = new Date(dateStr);
@@ -13,7 +12,6 @@ function formatDateForInput(dateStr: string) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-// ⭐️ 提案1：日付を綺麗にゼロ埋め（2026/06/01）にするための専用ツール
 function formatToZeroPadding(dateStr: string) {
   if (!dateStr) return "";
   const parts = dateStr.split("/");
@@ -57,6 +55,11 @@ export function DiaryCard({
   const [isPending, startTransition] = useTransition();
   const [isExpanded, setIsExpanded] = useState(false);
 
+  // ⭐️ 判定用の変数を用意（isNoTags を追加）
+  const isNoTitle = diary.title === "無題";
+  const isNoContent = diary.content === "エピソード記録なし";
+  const isNoTags = diary.tags === "タグなし";
+
   if (isEditing) {
     return (
       <div className="p-6 sm:p-8 border-2 border-[#8FA391] rounded-2xl shadow-md bg-[#F9FBF9] transition duration-300">
@@ -70,22 +73,25 @@ export function DiaryCard({
           
           <div>
             <label className="block text-xs font-medium text-[#888888] mb-1">日付</label>
-            <input type="date" name="date" defaultValue={formatDateForInput(diary.date)} className="w-full p-2.5 border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] outline-none text-[#555555] bg-white cursor-pointer" required />
+            <input type="date" name="date" defaultValue={formatDateForInput(diary.date)} className="w-full p-2.5 border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] outline-none text-[#555555] bg-white cursor-pointer" />
           </div>
 
           <div>
             <label className="block text-xs font-medium text-[#888888] mb-1">タイトル</label>
-            <input type="text" name="title" defaultValue={diary.title} className="w-full p-2.5 border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] outline-none text-[#333333] bg-white" />
+            {/* ⭐️ 「無題」の場合は入力欄を空っぽにしてあげる気配り */}
+            <input type="text" name="title" defaultValue={isNoTitle ? "" : diary.title} placeholder="無題" className="w-full p-2.5 border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] outline-none text-[#333333] bg-white" />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-[#888888] mb-1">本文</label>
-            <textarea name="content" defaultValue={diary.content} rows={5} className="w-full p-2.5 border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] outline-none text-[#333333] resize-none bg-white" />
+            <label className="block text-xs font-medium text-[#888888] mb-1">エピソード</label>
+            {/* ⭐️ 「エピソード記録なし」の場合は入力欄を空っぽにしてあげる気配り */}
+            <textarea name="content" defaultValue={isNoContent ? "" : diary.content} placeholder="エピソード記録なし" rows={5} className="w-full p-2.5 border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] outline-none text-[#333333] resize-none bg-white" />
           </div>
 
+          {/* ⭐️ 「タグなし」の場合は入力欄を空っぽにしてあげる */}
           <div>
             <label className="block text-xs font-medium text-[#888888] mb-1">タグ</label>
-            <input type="text" name="tags" defaultValue={diary.tags} className="w-full p-2.5 border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] outline-none text-[#555555] bg-white" />
+            <input type="text" name="tags" defaultValue={isNoTags ? "" : diary.tags} placeholder="タグなし" className="w-full p-2.5 border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] outline-none text-[#555555] bg-white" />
           </div>
 
           <div className="flex justify-end gap-3 pt-3">
@@ -104,21 +110,17 @@ export function DiaryCard({
   return (
     <div className="p-6 border border-[#EBE8E0] rounded-2xl shadow-sm bg-white hover:shadow-md transition duration-300">
       
-      {/* ⭐️ 提案2：スマホでは縦並び(flex-col)、PCでは横並び(sm:flex-row)にして余白を確保 */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-5 gap-4">
-        
-        {/* タイトルと日付エリア（横幅をたっぷり使う） */}
         <div className="w-full">
-          <span className="font-bold text-xl block mb-1 text-[#333333] break-words">
+          {/* ⭐️ 「無題」の時は文字を薄くして斜体にする */}
+          <span className={`text-xl block mb-1 break-words ${isNoTitle ? "text-[#B0B0B0] italic font-medium" : "text-[#333333] font-bold"}`}>
             <Highlight text={diary.title} query={searchQuery} />
           </span>
-          {/* ⭐️ 提案1：日付表示を formatToZeroPadding 関数に通して綺麗にする */}
           <span className="text-sm text-[#8FA391] font-medium">
             {formatToZeroPadding(diary.date)}
           </span>
         </div>
 
-        {/* ⭐️ ボタンエリア：絶対に押し潰されない(shrink-0)、スマホでは右寄せ(self-end) */}
         <div className="flex gap-2 shrink-0 self-end sm:self-start">
           <button type="button" onClick={() => setIsEditing(true)} className="text-[#8FA391] hover:text-[#7C907E] text-sm font-medium border border-[#EBE8E0] hover:border-[#8FA391] rounded-lg px-3 py-1.5 transition bg-[#F9FBF9] hover:bg-[#F0F4F0]">
             編集
@@ -132,21 +134,28 @@ export function DiaryCard({
         </div>
       </div>
       
+      {/* ⭐️ エピソードが無い時はクリック判定自体を無くす */}
       <div 
-        onClick={() => setIsExpanded(!isExpanded)} 
-        className="cursor-pointer group"
+        onClick={() => !isNoContent && setIsExpanded(!isExpanded)} 
+        className={`${!isNoContent ? "cursor-pointer group" : ""}`}
       >
-        <p className={`text-[#555555] whitespace-pre-wrap leading-relaxed tracking-wide transition-all ${isExpanded ? "" : "line-clamp-3"}`}>
+        {/* ⭐️ 「エピソード記録なし」の時は文字を薄くして斜体にする */}
+        <p className={`whitespace-pre-wrap leading-relaxed tracking-wide transition-all ${isExpanded ? "" : "line-clamp-3"} ${isNoContent ? "text-[#B0B0B0] italic text-sm" : "text-[#555555]"}`}>
           <Highlight text={diary.content} query={searchQuery} />
         </p>
-        <div className="mt-2 text-sm text-[#A3B5A5] font-medium group-hover:text-[#8FA391] transition">
-          {isExpanded ? "▲ 閉じる" : "▼ 続きを読む"}
-        </div>
+        
+        {/* ⭐️ エピソードが無い時は「▼ 続きを読む」を隠す */}
+        {!isNoContent && (
+          <div className="mt-2 text-sm text-[#A3B5A5] font-medium group-hover:text-[#8FA391] transition">
+            {isExpanded ? "▲ 閉じる" : "▼ 続きを読む"}
+          </div>
+        )}
       </div>
       
+      {/* ⭐️ 「タグなし」の時は背景を白にして、文字を薄いグレー＆斜体にする */}
       {diary.tags && (
         <div className="mt-6">
-          <span className="inline-block bg-[#F0F2EF] text-[#6B7D6C] text-xs px-3.5 py-1.5 rounded-full font-medium tracking-wide">
+          <span className={`inline-block text-xs px-3.5 py-1.5 rounded-full font-medium tracking-wide ${isNoTags ? "bg-white border border-[#EBE8E0] text-[#B0B0B0] italic" : "bg-[#F0F2EF] text-[#6B7D6C]"}`}>
             <Highlight text={diary.tags} query={searchQuery} />
           </span>
         </div>
