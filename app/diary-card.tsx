@@ -1,6 +1,5 @@
 "use client";
 
-// ⭐️ 高さを測るためのツール（useRef, useEffect）を追加
 import { useState, useTransition, useRef, useEffect } from "react";
 
 function formatDateForInput(dateStr: string) {
@@ -56,7 +55,6 @@ export function DiaryCard({
   const [isPending, startTransition] = useTransition();
   const [isExpanded, setIsExpanded] = useState(false);
 
-  // ⭐️ 新規追加：文章がはみ出しているかどうかを判定するための変数
   const contentRef = useRef<HTMLParagraphElement>(null);
   const [isOverflowing, setIsOverflowing] = useState(false);
 
@@ -64,12 +62,9 @@ export function DiaryCard({
   const isNoContent = diary.content === "エピソード記録なし";
   const isNoTags = diary.tags === "タグなし";
 
-  // ⭐️ 新規追加：画面に表示された直後に、文章の高さを自動チェックする
   useEffect(() => {
     const el = contentRef.current;
     if (el) {
-      // 「本来の文章の高さ(scrollHeight)」が「3行分に制限された高さ(clientHeight)」を
-      // 超えていれば、はみ出している（＝長文である）と判定する！
       setIsOverflowing(el.scrollHeight > el.clientHeight);
     }
   }, [diary.content]);
@@ -101,7 +96,8 @@ export function DiaryCard({
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-[#888888] mb-1">タグ</label>
+            {/* ⭐️ 編集時は、今まで通りカンマ区切りの文字列として編集できるようにします */}
+            <label className="block text-xs font-medium text-[#888888] mb-1">タグ（複数ある場合は「、」で区切る）</label>
             <input type="text" name="tags" defaultValue={isNoTags ? "" : diary.tags} placeholder="タグなし" className="w-full p-2.5 border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] outline-none text-[#555555] bg-white" />
           </div>
 
@@ -144,12 +140,10 @@ export function DiaryCard({
         </div>
       </div>
       
-      {/* ⭐️ クリック判定の条件に「isOverflowing (はみ出しているか)」を追加 */}
       <div 
         onClick={() => !isNoContent && isOverflowing && setIsExpanded(!isExpanded)} 
         className={`${!isNoContent && isOverflowing ? "cursor-pointer group" : ""}`}
       >
-        {/* ⭐️ ref={contentRef} を付けて、システムがこの段落の高さを測れるようにする */}
         <p 
           ref={contentRef}
           className={`whitespace-pre-wrap leading-relaxed tracking-wide transition-all ${isExpanded ? "" : "line-clamp-3"} ${isNoContent ? "text-[#B0B0B0] italic text-sm" : "text-[#555555]"}`}
@@ -157,7 +151,6 @@ export function DiaryCard({
           <Highlight text={diary.content} query={searchQuery} />
         </p>
         
-        {/* ⭐️ 「エピソードがあり」かつ「3行を超えている長文」の時だけボタンを表示 */}
         {!isNoContent && isOverflowing && (
           <div className="mt-2 text-sm text-[#A3B5A5] font-medium group-hover:text-[#8FA391] transition">
             {isExpanded ? "▲ 閉じる" : "▼ 続きを読む"}
@@ -165,11 +158,33 @@ export function DiaryCard({
         )}
       </div>
       
+      {/* ⭐️ ここからがタグの切り刻み＆ハッシュタグ化システムです！ */}
       {diary.tags && (
-        <div className="mt-6">
-          <span className={`inline-block text-xs px-3.5 py-1.5 rounded-full font-medium tracking-wide ${isNoTags ? "bg-white border border-[#EBE8E0] text-[#B0B0B0] italic" : "bg-[#F0F2EF] text-[#6B7D6C]"}`}>
-            <Highlight text={diary.tags} query={searchQuery} />
-          </span>
+        <div className="mt-6 flex flex-wrap gap-2">
+          {isNoTags ? (
+            <span className="inline-block text-xs px-3.5 py-1.5 rounded-full font-medium tracking-wide bg-white border border-[#EBE8E0] text-[#B0B0B0] italic">
+              <Highlight text={diary.tags} query={searchQuery} />
+            </span>
+          ) : (
+            // 「、」で文字列を分割（split）して配列にし、それぞれ（map）をカプセルにする
+            diary.tags.split("、").map((tag: string, index: number) => {
+              const trimmedTag = tag.trim();
+              if (!trimmedTag) return null; // 空白のタグはスキップ
+              
+              // 万が一手動で「#」を入力していたら取り除き、綺麗なデータにする
+              const cleanTag = trimmedTag.startsWith("#") ? trimmedTag.substring(1) : trimmedTag;
+
+              return (
+                <span 
+                  key={index} 
+                  className="inline-block bg-[#F0F2EF] text-[#6B7D6C] text-xs px-3.5 py-1.5 rounded-full font-medium tracking-wide shadow-sm hover:bg-[#EBE8E0] transition"
+                >
+                  <span className="text-[#A3B5A5] mr-0.5">#</span>
+                  <Highlight text={cleanTag} query={searchQuery} />
+                </span>
+              );
+            })
+          )}
         </div>
       )}
     </div>
