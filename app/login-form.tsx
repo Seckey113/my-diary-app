@@ -21,7 +21,7 @@ export function LoginForm() {
     <div className="w-full max-w-sm mx-auto bg-white p-8 sm:p-10 rounded-3xl shadow-sm border border-[#EBE8E0] transform transition-all">
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold text-[#8FA391] tracking-wider mb-2">My Diary!!</h1>
-        <p className="text-[#888888] text-xs font-medium tracking-widest">私だけにしか語れない物語</p>
+        <p className="text-[#888888] text-xs font-medium tracking-widest">私だけにしか紡げない物語</p>
       </div>
       
       <form action={handleSubmit} className="space-y-5">

@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "My Diary!!",
-  description: "私だけにしか綴れない体験記",
+  description: "私だけにしか紡げない物語",
 };
 
 // ⭐️ 新規追加：iPhoneのステータスバーやフチの色をアプリと一体化させる！
