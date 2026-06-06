@@ -17,6 +17,15 @@ function SubmitButton() {
   );
 }
 
+// ⭐️ 新規追加：今日の日付を「YYYY-MM-DD」の形式で取得する賢いツール
+function getToday() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 export function DiaryForm({ clientAction }: { clientAction: (formData: FormData) => Promise<any> }) {
   const [date, setDate] = useState("");
   const [title, setTitle] = useState("");
@@ -66,8 +75,8 @@ export function DiaryForm({ clientAction }: { clientAction: (formData: FormData)
         <input
           type="date"
           name="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
+          defaultValue={getToday()} /* ⭐️ 今日を初期値にする！ */
+          /* 💡 value と onChange はコンフリクトを起こすので削除しました！ */
           style={{ WebkitAppearance: "none" }} // 👈 Appleの独自デザインを完全に無効化！
           className="appearance-none min-w-0 block w-full max-w-full m-0 box-border px-2 py-3 bg-[#FCF9F2] border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] focus:border-transparent outline-none text-[#4A4A4A] text-base transition"
         />
