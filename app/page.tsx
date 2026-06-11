@@ -153,7 +153,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
 
   return (
     <div 
-      className="min-h-screen bg-[#FAF9F6] text-[#4A4A4A] py-12 px-4 sm:px-8"
+      // ⭐️ px-4 を px-2 sm:px-8 に変更（スマホの時は画面端ギリギリまで使う！）
+      className="min-h-screen bg-[#FAF9F6] text-[#4A4A4A] py-12 px-2 sm:px-8"
       style={{ fontFamily: '"Hiragino Maru Gothic ProN", "ヒラギノ丸ゴ ProN", "Zen Maru Gothic", sans-serif' }}
     >
       <main className="max-w-2xl mx-auto">
@@ -183,7 +184,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
                   {year}
                   <span className="text-sm transition-transform duration-300 group-open:rotate-180">▼</span>
                 </summary>
-                <div className="p-4 space-y-4">
+                <div className="p-2 sm:p-4 space-y-4">
                   {Object.keys(groupedDiaries[year]).sort((a, b) => parseInt(b) - parseInt(a)).map((month, mIndex) => (
                     <details key={month} className="group/month bg-[#FAF9F6] rounded-xl border border-[#EBE8E0] overflow-hidden" open={(index === 0 && mIndex === 0) || searchQuery !== ""}>
                       <summary className="cursor-pointer p-4 font-bold text-lg text-[#6B7D6C] hover:bg-[#EBE8E0] transition flex justify-between items-center list-none [&::-webkit-details-marker]:hidden">
@@ -193,7 +194,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
                         </div>
                         <span className="text-xs transition-transform duration-300 group-open/month:rotate-180 text-[#8FA391]">▼</span>
                       </summary>
-                      <div className="p-4 space-y-5 bg-white">
+                      <div className="p-2 sm:p-4 space-y-5 bg-white">
                         {groupedDiaries[year][month].map((diary) => (
                           <DiaryCard key={diary.id} diary={diary} searchQuery={searchQuery} onUpdate={editDiary} onDelete={removeDiary} />
                         ))}

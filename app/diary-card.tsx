@@ -115,7 +115,8 @@ export function DiaryCard({
   }
 
   return (
-    <div className="p-6 border border-[#EBE8E0] rounded-2xl shadow-sm bg-white hover:shadow-md transition duration-300">
+    // ⭐️ p-6 を p-4 sm:p-6 に変更しました！
+    <div className="p-4 sm:p-6 border border-[#EBE8E0] rounded-2xl shadow-sm bg-white hover:shadow-md transition duration-300">
       
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-5 gap-4">
         <div className="w-full">
