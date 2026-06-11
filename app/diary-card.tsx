@@ -58,11 +58,13 @@ export function DiaryCard({
   const contentRef = useRef<HTMLParagraphElement>(null);
   const [isOverflowing, setIsOverflowing] = useState(false);
 
-  // ⭐️ 新規追加：どこをダブルタップしたかを記憶する変数と、入力欄を操作するためのリモコン（Ref）
   const [editFocus, setEditFocus] = useState<"title" | "content" | "tags" | null>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const contentInputRef = useRef<HTMLTextAreaElement>(null);
   const tagsInputRef = useRef<HTMLInputElement>(null);
+
+  // ⭐️ 新規追加：長押し（0.5秒）を判定するためのタイマー
+  const pressTimer = useRef<NodeJS.Timeout | null>(null);
 
   const isNoTitle = diary.title === "無題";
   const isNoContent = diary.content === "エピソード記録なし";
@@ -75,22 +77,40 @@ export function DiaryCard({
     }
   }, [diary.content]);
 
-  // ⭐️ 新規追加：編集画面が開いた瞬間、指定された入力欄に自動でカーソルを合わせる魔法
+  // ⭐️ 新規追加：エピソードの入力欄を「文章の長さ」に合わせて自動で広げる魔法
+  const adjustTextareaHeight = () => {
+    if (contentInputRef.current) {
+      contentInputRef.current.style.height = "auto"; // 一度リセットして
+      contentInputRef.current.style.height = `${contentInputRef.current.scrollHeight}px`; // 全文が入る高さに設定！
+    }
+  };
+
   useEffect(() => {
     if (isEditing) {
+      adjustTextareaHeight(); // 編集が開いた瞬間に広げる
       const timer = setTimeout(() => {
         if (editFocus === "title" && titleInputRef.current) titleInputRef.current.focus();
         else if (editFocus === "content" && contentInputRef.current) contentInputRef.current.focus();
         else if (editFocus === "tags" && tagsInputRef.current) tagsInputRef.current.focus();
-      }, 50); // 画面が切り替わるのを0.05秒だけ待ってからカーソルを当てる
+      }, 50);
       return () => clearTimeout(timer);
     }
   }, [isEditing, editFocus]);
 
-  // ⭐️ 新規追加：編集モードを開始する専用の関数
-  const startEditing = (target: "title" | "content" | "tags" | null = null) => {
-    setEditFocus(target);
-    setIsEditing(true);
+  // ⭐️ 新規追加：長押しの仕組み（プロ仕様）
+  const handlePressStart = (target: "title" | "content" | "tags") => {
+    pressTimer.current = setTimeout(() => {
+      setEditFocus(target);
+      setIsEditing(true);
+      // iPhoneなどでブルッと振動させる（対応機種のみ）
+      if (typeof window !== "undefined" && window.navigator && window.navigator.vibrate) {
+        window.navigator.vibrate(50);
+      }
+    }, 500); // 0.5秒で発動
+  };
+
+  const cancelPress = () => {
+    if (pressTimer.current) clearTimeout(pressTimer.current);
   };
 
   if (isEditing) {
@@ -111,19 +131,24 @@ export function DiaryCard({
 
           <div>
             <label className="block text-xs font-medium text-[#888888] mb-1">タイトル</label>
-            {/* ⭐️ ref={titleInputRef} を追加してリモコンを受信できるようにする */}
             <input ref={titleInputRef} type="text" name="title" defaultValue={isNoTitle ? "" : diary.title} placeholder="無題" className="w-full p-2.5 border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] outline-none text-[#333333] bg-white" />
           </div>
 
           <div>
             <label className="block text-xs font-medium text-[#888888] mb-1">エピソード</label>
-            {/* ⭐️ ref={contentInputRef} を追加 */}
-            <textarea ref={contentInputRef} name="content" defaultValue={isNoContent ? "" : diary.content} placeholder="エピソード記録なし" rows={7} className="w-full p-2.5 border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] outline-none text-[#333333] resize-none bg-white" />
+            {/* ⭐️ onChangeを追加し、文字を打つたびにも広がるようにする */}
+            <textarea 
+              ref={contentInputRef} 
+              name="content" 
+              defaultValue={isNoContent ? "" : diary.content} 
+              placeholder="エピソード記録なし" 
+              onChange={adjustTextareaHeight}
+              className="w-full p-2.5 border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] outline-none text-[#333333] resize-none bg-white overflow-hidden" 
+            />
           </div>
 
           <div>
             <label className="block text-xs font-medium text-[#888888] mb-1">タグ（複数ある場合は「、」で区切る）</label>
-            {/* ⭐️ ref={tagsInputRef} を追加 */}
             <input ref={tagsInputRef} type="text" name="tags" defaultValue={isNoTags ? "" : diary.tags} placeholder="タグなし" className="w-full p-2.5 border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] outline-none text-[#555555] bg-white" />
           </div>
 
@@ -147,20 +172,28 @@ export function DiaryCard({
         <span className="text-xs text-[#8FA391] font-medium block mb-1">
           {formatToZeroPadding(diary.date)}
         </span>
-        {/* ⭐️ タイトル部分：onDoubleClick と touch-manipulation を追加 */}
+        {/* ⭐️ タイトル長押し設定 */}
         <h3 
-          onDoubleClick={() => startEditing("title")}
-          className={`text-lg sm:text-xl break-words leading-snug touch-manipulation ${isNoTitle ? "text-[#B0B0B0] italic font-medium" : "text-[#333333] font-bold"}`}
+          onPointerDown={() => handlePressStart("title")}
+          onPointerUp={cancelPress}
+          onPointerLeave={cancelPress}
+          onPointerMove={cancelPress}
+          style={{ WebkitTouchCallout: "none" }}
+          className={`text-lg sm:text-xl break-words leading-snug touch-manipulation select-none ${isNoTitle ? "text-[#B0B0B0] italic font-medium" : "text-[#333333] font-bold"}`}
         >
           <Highlight text={diary.title} query={searchQuery} />
         </h3>
       </div>
       
-      {/* ⭐️ エピソード部分：onDoubleClick と touch-manipulation を追加 */}
       <div 
         onClick={() => !isNoContent && isOverflowing && setIsExpanded(!isExpanded)} 
-        onDoubleClick={() => startEditing("content")}
-        className={`mb-2 touch-manipulation ${!isNoContent && isOverflowing ? "cursor-pointer group" : ""}`}
+        // ⭐️ エピソード長押し設定
+        onPointerDown={() => handlePressStart("content")}
+        onPointerUp={cancelPress}
+        onPointerLeave={cancelPress}
+        onPointerMove={cancelPress}
+        style={{ WebkitTouchCallout: "none" }}
+        className={`mb-2 touch-manipulation select-none ${!isNoContent && isOverflowing ? "cursor-pointer group" : ""}`}
       >
         <p 
           ref={contentRef}
@@ -178,10 +211,14 @@ export function DiaryCard({
       
       <div className="mt-auto pt-4 flex flex-wrap justify-between items-end gap-4 border-t border-dashed border-[#F0F0F0]">
         
-        {/* ⭐️ タグ部分：onDoubleClick と touch-manipulation を追加 */}
+        {/* ⭐️ タグ長押し設定 */}
         <div 
-          onDoubleClick={() => startEditing("tags")}
-          className="flex flex-wrap gap-2 flex-1 touch-manipulation"
+          onPointerDown={() => handlePressStart("tags")}
+          onPointerUp={cancelPress}
+          onPointerLeave={cancelPress}
+          onPointerMove={cancelPress}
+          style={{ WebkitTouchCallout: "none" }}
+          className="flex flex-wrap gap-2 flex-1 touch-manipulation select-none"
         >
           {diary.tags && (
             isNoTags ? (
@@ -208,8 +245,7 @@ export function DiaryCard({
         </div>
 
         <div className="flex gap-2 shrink-0">
-          {/* ⭐️ 通常の編集ボタンを押した時は、特にフォーカスせず普通に開く */}
-          <button type="button" onClick={() => startEditing(null)} className="text-[#8FA391] hover:text-[#7C907E] text-xs sm:text-sm font-medium border border-[#EBE8E0] hover:border-[#8FA391] rounded-lg px-3 py-2 transition bg-[#F9FBF9] hover:bg-[#F0F4F0]">
+          <button type="button" onClick={() => { setEditFocus(null); setIsEditing(true); }} className="text-[#8FA391] hover:text-[#7C907E] text-xs sm:text-sm font-medium border border-[#EBE8E0] hover:border-[#8FA391] rounded-lg px-3 py-2 transition bg-[#F9FBF9] hover:bg-[#F0F4F0]">
             編集
           </button>
           <form action={onDelete}>
