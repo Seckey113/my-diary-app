@@ -63,9 +63,6 @@ export function DiaryCard({
   const contentInputRef = useRef<HTMLTextAreaElement>(null);
   const tagsInputRef = useRef<HTMLInputElement>(null);
 
-  // ⭐️ 新規追加：長押し（0.5秒）を判定するためのタイマー
-  const pressTimer = useRef<NodeJS.Timeout | null>(null);
-
   const isNoTitle = diary.title === "無題";
   const isNoContent = diary.content === "エピソード記録なし";
   const isNoTags = diary.tags === "タグなし";
@@ -77,17 +74,17 @@ export function DiaryCard({
     }
   }, [diary.content]);
 
-  // ⭐️ 新規追加：エピソードの入力欄を「文章の長さ」に合わせて自動で広げる魔法
+  // エピソードの入力欄を文章に合わせて自動で広げる
   const adjustTextareaHeight = () => {
     if (contentInputRef.current) {
-      contentInputRef.current.style.height = "auto"; // 一度リセットして
-      contentInputRef.current.style.height = `${contentInputRef.current.scrollHeight}px`; // 全文が入る高さに設定！
+      contentInputRef.current.style.height = "auto";
+      contentInputRef.current.style.height = `${contentInputRef.current.scrollHeight}px`;
     }
   };
 
   useEffect(() => {
     if (isEditing) {
-      adjustTextareaHeight(); // 編集が開いた瞬間に広げる
+      adjustTextareaHeight();
       const timer = setTimeout(() => {
         if (editFocus === "title" && titleInputRef.current) titleInputRef.current.focus();
         else if (editFocus === "content" && contentInputRef.current) contentInputRef.current.focus();
@@ -97,20 +94,10 @@ export function DiaryCard({
     }
   }, [isEditing, editFocus]);
 
-  // ⭐️ 新規追加：長押しの仕組み（プロ仕様）
-  const handlePressStart = (target: "title" | "content" | "tags") => {
-    pressTimer.current = setTimeout(() => {
-      setEditFocus(target);
-      setIsEditing(true);
-      // iPhoneなどでブルッと振動させる（対応機種のみ）
-      if (typeof window !== "undefined" && window.navigator && window.navigator.vibrate) {
-        window.navigator.vibrate(50);
-      }
-    }, 500); // 0.5秒で発動
-  };
-
-  const cancelPress = () => {
-    if (pressTimer.current) clearTimeout(pressTimer.current);
+  // 編集モードを開始する
+  const startEditing = (target: "title" | "content" | "tags" | null = null) => {
+    setEditFocus(target);
+    setIsEditing(true);
   };
 
   if (isEditing) {
@@ -136,7 +123,6 @@ export function DiaryCard({
 
           <div>
             <label className="block text-xs font-medium text-[#888888] mb-1">エピソード</label>
-            {/* ⭐️ onChangeを追加し、文字を打つたびにも広がるようにする */}
             <textarea 
               ref={contentInputRef} 
               name="content" 
@@ -172,38 +158,31 @@ export function DiaryCard({
         <span className="text-xs text-[#8FA391] font-medium block mb-1">
           {formatToZeroPadding(diary.date)}
         </span>
-        {/* ⭐️ タイトル長押し設定 */}
+        {/* ⭐️ ダブルタップで編集（長押し制限を撤廃してコピペ可能に） */}
         <h3 
-          onPointerDown={() => handlePressStart("title")}
-          onPointerUp={cancelPress}
-          onPointerLeave={cancelPress}
-          onPointerMove={cancelPress}
-          style={{ WebkitTouchCallout: "none" }}
-          className={`text-lg sm:text-xl break-words leading-snug touch-manipulation select-none ${isNoTitle ? "text-[#B0B0B0] italic font-medium" : "text-[#333333] font-bold"}`}
+          onDoubleClick={() => startEditing("title")}
+          className={`text-lg sm:text-xl break-words leading-snug touch-manipulation ${isNoTitle ? "text-[#B0B0B0] italic font-medium" : "text-[#333333] font-bold"}`}
         >
           <Highlight text={diary.title} query={searchQuery} />
         </h3>
       </div>
       
-      <div 
-        onClick={() => !isNoContent && isOverflowing && setIsExpanded(!isExpanded)} 
-        // ⭐️ エピソード長押し設定
-        onPointerDown={() => handlePressStart("content")}
-        onPointerUp={cancelPress}
-        onPointerLeave={cancelPress}
-        onPointerMove={cancelPress}
-        style={{ WebkitTouchCallout: "none" }}
-        className={`mb-2 touch-manipulation select-none ${!isNoContent && isOverflowing ? "cursor-pointer group" : ""}`}
-      >
+      <div className="mb-2">
+        {/* ⭐️ 文章部分：ダブルタップで編集 ＆ コピペ可能！ */}
         <p 
           ref={contentRef}
-          className={`whitespace-pre-wrap leading-[1.8] transition-all ${isExpanded ? "" : "line-clamp-3"} ${isNoContent ? "text-[#B0B0B0] italic text-sm" : "text-[#444444] text-[15px] sm:text-base"}`}
+          onDoubleClick={() => startEditing("content")}
+          className={`whitespace-pre-wrap leading-[1.8] transition-all touch-manipulation ${isExpanded ? "" : "line-clamp-3"} ${isNoContent ? "text-[#B0B0B0] italic text-sm" : "text-[#444444] text-[15px] sm:text-base"}`}
         >
           <Highlight text={diary.content} query={searchQuery} />
         </p>
         
+        {/* ⭐️ 開閉操作は「ここをタップした時だけ」に限定して競合を回避！ */}
         {!isNoContent && isOverflowing && (
-          <div className="mt-2 text-sm text-[#A3B5A5] font-medium group-hover:text-[#8FA391] transition inline-block">
+          <div 
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="mt-2 text-sm text-[#A3B5A5] font-medium hover:text-[#8FA391] transition inline-block cursor-pointer px-2 py-1 -ml-2"
+          >
             {isExpanded ? "▲ 閉じる" : "▼ 続きを読む"}
           </div>
         )}
@@ -211,14 +190,10 @@ export function DiaryCard({
       
       <div className="mt-auto pt-4 flex flex-wrap justify-between items-end gap-4 border-t border-dashed border-[#F0F0F0]">
         
-        {/* ⭐️ タグ長押し設定 */}
+        {/* ⭐️ タグ部分：ダブルタップで編集 */}
         <div 
-          onPointerDown={() => handlePressStart("tags")}
-          onPointerUp={cancelPress}
-          onPointerLeave={cancelPress}
-          onPointerMove={cancelPress}
-          style={{ WebkitTouchCallout: "none" }}
-          className="flex flex-wrap gap-2 flex-1 touch-manipulation select-none"
+          onDoubleClick={() => startEditing("tags")}
+          className="flex flex-wrap gap-2 flex-1 touch-manipulation"
         >
           {diary.tags && (
             isNoTags ? (
@@ -245,7 +220,7 @@ export function DiaryCard({
         </div>
 
         <div className="flex gap-2 shrink-0">
-          <button type="button" onClick={() => { setEditFocus(null); setIsEditing(true); }} className="text-[#8FA391] hover:text-[#7C907E] text-xs sm:text-sm font-medium border border-[#EBE8E0] hover:border-[#8FA391] rounded-lg px-3 py-2 transition bg-[#F9FBF9] hover:bg-[#F0F4F0]">
+          <button type="button" onClick={() => startEditing(null)} className="text-[#8FA391] hover:text-[#7C907E] text-xs sm:text-sm font-medium border border-[#EBE8E0] hover:border-[#8FA391] rounded-lg px-3 py-2 transition bg-[#F9FBF9] hover:bg-[#F0F4F0]">
             編集
           </button>
           <form action={onDelete}>
