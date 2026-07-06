@@ -48,15 +48,12 @@ function parseDiaryDate(dateStr: string) {
   return new Date(year, month - 1, day);
 }
 
-// ⭐️ 修正：ハイフン区切り(新規作成)とスラッシュ区切り(既存編集)の両方に完全対応！
-// 過去の日付が「今日」で上書きされる最悪のバグを未然に防ぎます。
 function formatDateInputToDiaryDate(dateInput: string) {
   if (!dateInput) {
     const now = new Date();
     return `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}/${String(now.getDate()).padStart(2, "0")}`;
   }
 
-  // "-" と "/" のどちらで来ても処理できるように、いったん "/" に統一する
   const normalized = String(dateInput).replace(/-/g, "/");
   const parts = normalized.split("/");
 
@@ -67,7 +64,6 @@ function formatDateInputToDiaryDate(dateInput: string) {
     return `${year}/${month}/${day}`;
   }
 
-  // 想定外の形式だった場合は、今日の日付にフォールバックする
   const now = new Date();
   return `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}/${String(now.getDate()).padStart(2, "0")}`;
 }
@@ -98,10 +94,16 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
   const resolvedParams = await searchParams;
   const searchQuery = resolvedParams.q || "";
 
+  // ⭐️ 鉄壁の安全装置を備えた新規保存処理
   async function createEntry(formData: FormData) {
     "use server";
+    
+    // どちらのタブから送信されたかを取得！
+    const entryType = String(formData.get("entryType") ?? "diary");
+
     const dateInput = String(formData.get("date") ?? "");
     const date = formatDateInputToDiaryDate(dateInput);
+    const normalizedDate = normalizeDateKey(date);
 
     const title = formatPunctuation(String(formData.get("title") ?? "")).trim();
     const content = formatPunctuation(String(formData.get("content") ?? "")).trim();
@@ -112,19 +114,49 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
     const actionFact = formatPunctuation(String(formData.get("actionFact") ?? "")).trim();
     const nextAction = formatPunctuation(String(formData.get("nextAction") ?? "")).trim();
 
-    const hasEpisode = title !== "" || content !== "" || tags !== "";
-    const hasGrowth = purpose !== "" || thoughtProcess !== "" || actionFact !== "" || nextAction !== "";
+    // 📝 【日記タブ】から送信された場合は、日記エピソードだけを保存する！
+    if (entryType === "diary") {
+      const hasEpisode = title !== "" || content !== "" || tags !== "";
+      if (!hasEpisode) return;
 
-    if (!hasEpisode && !hasGrowth) return;
+      await addDiary(
+        date,
+        title || "無題",
+        content || "エピソード記録なし",
+        tags || "タグなし"
+      );
 
-    if (hasEpisode) {
-      await addDiary(date, title || "無題", content || "エピソード記録なし", tags || "タグなし");
+      revalidatePath("/");
+      return;
     }
-    if (hasGrowth) {
-      await upsertReview(date, purpose, thoughtProcess, actionFact, nextAction);
-    }
 
-    revalidatePath("/");
+    // 🎯 【目的・振り返りタブ】から送信された場合は、Reviewsだけを保存する！
+    if (entryType === "growth") {
+      const hasGrowth = purpose !== "" || thoughtProcess !== "" || actionFact !== "" || nextAction !== "";
+      if (!hasGrowth) return;
+
+      // ⭐️ 修正完了：保存の「直前」に最新のデータベース状況を取得する！（究極の安全対策）
+      const latestReviews = await getReviews();
+      const existingReview = latestReviews.find(
+        (review) => normalizeDateKey(review.date) === normalizedDate
+      );
+
+      // 新規フォームからの保存では、「空欄＝未変更」として扱い、元の値を残す（マージする）
+      const mergedPurpose = purpose || existingReview?.purpose || "";
+      const mergedThoughtProcess = thoughtProcess || existingReview?.thoughtProcess || "";
+      const mergedActionFact = actionFact || existingReview?.actionFact || "";
+      const mergedNextAction = nextAction || existingReview?.nextAction || "";
+
+      await upsertReview(
+        date,
+        mergedPurpose,
+        mergedThoughtProcess,
+        mergedActionFact,
+        mergedNextAction
+      );
+
+      revalidatePath("/");
+    }
   }
 
   async function editDiary(formData: FormData) {
@@ -250,7 +282,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
         </div>
 
         <Suspense fallback={<div className="bg-white p-5 sm:p-8 rounded-3xl shadow-sm border border-[#EBE8E0] mb-10 text-[#9CA3AF] text-center">入力フォームを読み込み中...</div>}>
-          <DiaryForm clientAction={createEntry} />
+          <DiaryForm clientAction={createEntry} existingReviews={reviews} />
         </Suspense>
 
         <SearchBar />

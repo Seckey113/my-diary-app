@@ -1,13 +1,7 @@
 "use client";
 import { useState, useTransition } from "react";
 
-function formatToZeroPadding(dateStr: string) {
-  if (!dateStr) return "";
-  const parts = dateStr.split("/");
-  if (parts.length === 3) return `${parts[0]}/${parts[1].padStart(2, '0')}/${parts[2].padStart(2, '0')}`;
-  return dateStr;
-}
-
+// Safariのバグ回避用：保存されている日付を input type="date" 用に変換
 function formatDateForInput(dateStr: string) {
   if (!dateStr) return "";
   const parts = dateStr.split("/");
@@ -22,6 +16,7 @@ function formatDateForInput(dateStr: string) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+// 検索文字のエスケープ処理
 function escapeRegExp(text: string) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -40,7 +35,7 @@ export function Highlight({ text, query }: { text?: string; query: string }) {
   );
 }
 
-// ⭐️ 純粋な日記エピソード専用のカードになりました！
+// ⭐️ 純粋な日記エピソード専用のカード
 export function DiaryCard({ 
   diary, searchQuery, onUpdate, onDelete 
 }: { 
