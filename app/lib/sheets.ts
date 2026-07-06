@@ -1,5 +1,6 @@
 import { google } from "googleapis";
 import crypto from "crypto";
+import { unstable_cache } from "next/cache"; // ⭐️ キャッシュ機能をインポート
 
 const ALGORITHM = "aes-256-cbc";
 const PASSWORD = process.env.ENCRYPTION_PASSWORD || "default-fallback-secure-password-string";
@@ -44,7 +45,6 @@ async function getSheetsClient() {
   return google.sheets({ version: "v4", auth });
 }
 
-// ⭐️ 日付表記のゆれを吸収する関数（2026-07-06 や 2026/7/6 を 2026/07/06 に統一）
 function normalizeDateKey(dateStr: string) {
   if (!dateStr) return "";
   const normalized = String(dateStr).replace(/-/g, "/");
@@ -60,7 +60,8 @@ function normalizeDateKey(dateStr: string) {
    📝 日記エピソード用関数（Dataシート / A〜H列）
 ========================================================================= */
 
-export async function getDiaries() {
+// ⭐️ 内部関数：スプレッドシートから直接生データを読み込む
+async function readDiariesFromSheet() {
   const sheets = await getSheetsClient();
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
@@ -97,6 +98,15 @@ export async function getDiaries() {
   return diaries;
 }
 
+// ⭐️ 画面表示用：爆速のキャッシュ版！
+export const getDiaries = unstable_cache(
+  async () => {
+    return readDiariesFromSheet();
+  },
+  ["my_diaries_cache"],
+  { tags: ["diaries"] }
+);
+
 export async function addDiary(date: string, title: string, content: string, tags: string) {
   const sheets = await getSheetsClient();
   const id = crypto.randomUUID();
@@ -105,7 +115,7 @@ export async function addDiary(date: string, title: string, content: string, tag
   await sheets.spreadsheets.values.append({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
     range: `${SHEET_DATA}!A:H`,
-    valueInputOption: "RAW", // ⭐️ USER_ENTEREDからRAWに変更
+    valueInputOption: "RAW",
     requestBody: {
       values: [[id, date, encrypt(title), encrypt(content), encrypt(tags), now, now, ""]],
     },
@@ -129,7 +139,7 @@ export async function updateDiary(id: string, date: string, title: string, conte
   await sheets.spreadsheets.values.update({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
     range: `${SHEET_DATA}!B${rowNumber}:E${rowNumber}`,
-    valueInputOption: "RAW", // ⭐️ RAWに変更
+    valueInputOption: "RAW",
     requestBody: { values: [[date, encrypt(title), encrypt(content), encrypt(tags)]] },
   });
 
@@ -202,7 +212,8 @@ export async function permanentlyDeleteDiary(id: string) {
    🎯 目的・振り返り用関数（Reviewsシート / A〜I列）
 ========================================================================= */
 
-export async function getReviews() {
+// ⭐️ 内部関数：スプレッドシートから直接生データを読み込む
+async function readReviewsFromSheet() {
   const sheets = await getSheetsClient();
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
@@ -218,7 +229,7 @@ export async function getReviews() {
     if (!row[0]) continue;
 
     reviews.push({
-      date: normalizeDateKey(row[0] || ""), // ⭐️ ここを追加！
+      date: normalizeDateKey(row[0] || ""),
       purpose: decrypt(row[1] || ""),
       thoughtProcess: decrypt(row[2] || ""),
       actionFact: decrypt(row[3] || ""),
@@ -232,7 +243,20 @@ export async function getReviews() {
   return reviews;
 }
 
-// ⭐️ 振り返りのUpsert（無ければ追加、あれば更新）
+// ⭐️ 画面表示用：爆速のキャッシュ版！
+export const getReviews = unstable_cache(
+  async () => {
+    return readReviewsFromSheet();
+  },
+  ["my_reviews_cache"],
+  { tags: ["reviews"] }
+);
+
+// ⭐️ 保存直前のマージ用：絶対にキャッシュを通さない最新の生データ！
+export async function getReviewsFresh() {
+  return readReviewsFromSheet();
+}
+
 export async function upsertReview(
   date: string, purpose: string, thoughtProcess: string, actionFact: string, nextAction: string
 ) {
@@ -243,7 +267,7 @@ export async function upsertReview(
   });
 
   const rows = response.data.values || [];
-  const targetDate = normalizeDateKey(date); // ⭐️ 表記ゆれを徹底排除
+  const targetDate = normalizeDateKey(date);
   const rowIndex = rows.findIndex((row) => normalizeDateKey(row[0] || "") === targetDate);
   
   const now = new Date().toISOString();
@@ -251,14 +275,13 @@ export async function upsertReview(
   const hasReflection = thoughtProcess.trim().length > 0 || actionFact.trim().length > 0 || nextAction.trim().length > 0;
 
   if (rowIndex === -1) {
-    // 【新規追加】
     const purposeWrittenAt = hasPurpose ? now : "";
     const reflectedAt = hasReflection ? now : "";
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: `${SHEET_REVIEWS}!A:I`,
-      valueInputOption: "RAW", // ⭐️ RAWに変更
+      valueInputOption: "RAW",
       requestBody: {
         values: [[
           targetDate, encrypt(purpose), encrypt(thoughtProcess), encrypt(actionFact), encrypt(nextAction),
@@ -267,10 +290,7 @@ export async function upsertReview(
       },
     });
   } else {
-    // 【上書き更新】
     const rowNumber = rowIndex + 1;
-    
-    // 既存のタイムスタンプを取得するため、その行全体を読み直す
     const existingRowResponse = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: `${SHEET_REVIEWS}!A${rowNumber}:I${rowNumber}`,
@@ -284,7 +304,7 @@ export async function upsertReview(
     await sheets.spreadsheets.values.update({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: `${SHEET_REVIEWS}!B${rowNumber}:G${rowNumber}`,
-      valueInputOption: "RAW", // ⭐️ RAWに変更
+      valueInputOption: "RAW",
       requestBody: {
         values: [[
           encrypt(purpose), encrypt(thoughtProcess), encrypt(actionFact), encrypt(nextAction),

@@ -6,9 +6,10 @@ import {
   restoreDiary,
   permanentlyDeleteDiary,
   getReviews,
+  getReviewsFresh,
   upsertReview,
 } from "./lib/sheets";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache"; // ⭐️ revalidateTag を追加！
 import { cookies } from "next/headers";
 import { Suspense } from "react";
 import { DiaryForm } from "./form";
@@ -88,19 +89,17 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
     );
   }
 
+  // ⭐️ ここはキャッシュされた超高速データが読み込まれます！
   const diaries = await getDiaries();
   const reviews = await getReviews();
   
   const resolvedParams = await searchParams;
   const searchQuery = resolvedParams.q || "";
 
-  // ⭐️ 鉄壁の安全装置を備えた新規保存処理
   async function createEntry(formData: FormData) {
     "use server";
     
-    // どちらのタブから送信されたかを取得！
     const entryType = String(formData.get("entryType") ?? "diary");
-
     const dateInput = String(formData.get("date") ?? "");
     const date = formatDateInputToDiaryDate(dateInput);
     const normalizedDate = normalizeDateKey(date);
@@ -114,47 +113,34 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
     const actionFact = formatPunctuation(String(formData.get("actionFact") ?? "")).trim();
     const nextAction = formatPunctuation(String(formData.get("nextAction") ?? "")).trim();
 
-    // 📝 【日記タブ】から送信された場合は、日記エピソードだけを保存する！
     if (entryType === "diary") {
       const hasEpisode = title !== "" || content !== "" || tags !== "";
       if (!hasEpisode) return;
 
-      await addDiary(
-        date,
-        title || "無題",
-        content || "エピソード記録なし",
-        tags || "タグなし"
-      );
+      await addDiary(date, title || "無題", content || "エピソード記録なし", tags || "タグなし");
 
+      revalidateTag("diaries"); // ⭐️ 日記のキャッシュを明示的に破棄
       revalidatePath("/");
       return;
     }
 
-    // 🎯 【目的・振り返りタブ】から送信された場合は、Reviewsだけを保存する！
     if (entryType === "growth") {
       const hasGrowth = purpose !== "" || thoughtProcess !== "" || actionFact !== "" || nextAction !== "";
       if (!hasGrowth) return;
 
-      // ⭐️ 修正完了：保存の「直前」に最新のデータベース状況を取得する！（究極の安全対策）
-      const latestReviews = await getReviews();
+      const latestReviews = await getReviewsFresh();
       const existingReview = latestReviews.find(
         (review) => normalizeDateKey(review.date) === normalizedDate
       );
 
-      // 新規フォームからの保存では、「空欄＝未変更」として扱い、元の値を残す（マージする）
       const mergedPurpose = purpose || existingReview?.purpose || "";
       const mergedThoughtProcess = thoughtProcess || existingReview?.thoughtProcess || "";
       const mergedActionFact = actionFact || existingReview?.actionFact || "";
       const mergedNextAction = nextAction || existingReview?.nextAction || "";
 
-      await upsertReview(
-        date,
-        mergedPurpose,
-        mergedThoughtProcess,
-        mergedActionFact,
-        mergedNextAction
-      );
+      await upsertReview(date, mergedPurpose, mergedThoughtProcess, mergedActionFact, mergedNextAction);
 
+      revalidateTag("reviews"); // ⭐️ 振り返りのキャッシュを明示的に破棄
       revalidatePath("/");
     }
   }
@@ -168,7 +154,10 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
     const title = formatPunctuation(String(formData.get("title") ?? "")).trim() || "無題";
     const content = formatPunctuation(String(formData.get("content") ?? "")).trim() || "エピソード記録なし";
     const tags = formatPunctuation(String(formData.get("tags") ?? "")).trim() || "タグなし";
+    
     await updateDiary(id, date, title, content, tags);
+    
+    revalidateTag("diaries"); // ⭐️ キャッシュ破棄
     revalidatePath("/");
   }
 
@@ -181,7 +170,10 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
     const thoughtProcess = formatPunctuation(String(formData.get("thoughtProcess") ?? "")).trim();
     const actionFact = formatPunctuation(String(formData.get("actionFact") ?? "")).trim();
     const nextAction = formatPunctuation(String(formData.get("nextAction") ?? "")).trim();
+    
     await upsertReview(date, purpose, thoughtProcess, actionFact, nextAction);
+    
+    revalidateTag("reviews"); // ⭐️ キャッシュ破棄
     revalidatePath("/");
   }
 
@@ -190,6 +182,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
     const id = String(formData.get("id") ?? "");
     if (!id) return;
     await deleteDiary(id);
+    
+    revalidateTag("diaries"); // ⭐️ キャッシュ破棄
     revalidatePath("/");
   }
 
@@ -198,6 +192,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
     const id = String(formData.get("id") ?? "");
     if (!id) return;
     await restoreDiary(id);
+    
+    revalidateTag("diaries"); // ⭐️ キャッシュ破棄
     revalidatePath("/");
   }
 
@@ -206,6 +202,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
     const id = String(formData.get("id") ?? "");
     if (!id) return;
     await permanentlyDeleteDiary(id);
+    
+    revalidateTag("diaries"); // ⭐️ キャッシュ破棄
     revalidatePath("/");
   }
 
