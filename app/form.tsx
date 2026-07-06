@@ -1,23 +1,7 @@
 "use client";
-import { useActionState, useEffect, useState } from "react";
-import { useFormStatus } from "react-dom";
+import { useRef, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation"; 
 
-function SubmitButton() {
-  const { pending } = useFormStatus();
-  return (
-    <button
-      type="submit"
-      disabled={pending}
-      className={`w-full text-white font-bold py-3.5 px-4 rounded-xl transition duration-300 shadow-sm ${
-        pending ? "bg-[#D1D5DB] cursor-not-allowed" : "bg-[#8FA391] hover:bg-[#7C907E]"
-      }`}
-    >
-      {pending ? "そっと保存しています..." : "日記を保存する"}
-    </button>
-  );
-}
-
-// ⭐️ 新規追加：今日の日付を「YYYY-MM-DD」の形式で取得する賢いツール
 function getToday() {
   const d = new Date();
   const yyyy = d.getFullYear();
@@ -26,107 +10,82 @@ function getToday() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-export function DiaryForm({ clientAction }: { clientAction: (formData: FormData) => Promise<any> }) {
-  const [date, setDate] = useState("");
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const [tags, setTags] = useState("");
+export function DiaryForm({ clientAction }: { clientAction: (formData: FormData) => Promise<void> }) {
+  const searchParams = useSearchParams();
+  const initialMode = searchParams.get("mode") === "growth" ? "growth" : "diary";
+  const focus = searchParams.get("focus");
+
+  const [activeTab, setActiveTab] = useState<"diary" | "growth">(initialMode);
+
+  const purposeRef = useRef<HTMLInputElement>(null);
+  const thoughtProcessRef = useRef<HTMLTextAreaElement>(null);
+  const actionFactRef = useRef<HTMLTextAreaElement>(null);
+  const nextActionRef = useRef<HTMLTextAreaElement>(null);
+  const contentRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    setDate(localStorage.getItem("draft-date") || "");
-    setTitle(localStorage.getItem("draft-title") || "");
-    setContent(localStorage.getItem("draft-content") || "");
-    setTags(localStorage.getItem("draft-tags") || "");
-  }, []);
+    if (activeTab === "growth") {
+      if (focus === "purpose") setTimeout(() => purposeRef.current?.focus(), 100);
+      if (focus === "thoughtProcess") setTimeout(() => thoughtProcessRef.current?.focus(), 100);
+      if (focus === "actionFact") setTimeout(() => actionFactRef.current?.focus(), 100);
+      if (focus === "nextAction") setTimeout(() => nextActionRef.current?.focus(), 100);
+    } else {
+      if (focus === "content") setTimeout(() => contentRef.current?.focus(), 100);
+    }
+  }, [focus, activeTab]);
 
-  useEffect(() => {
-    localStorage.setItem("draft-date", date);
-    localStorage.setItem("draft-title", title);
-    localStorage.setItem("draft-content", content);
-    localStorage.setItem("draft-tags", tags);
-  }, [date, title, content, tags]);
-
-  const [, formAction] = useActionState(async (prevState: any, formData: FormData) => {
-    await clientAction(formData);
-
-    setDate("");
-    setTitle("");
-    setContent("");
-    setTags("");
-    localStorage.removeItem("draft-date");
-    localStorage.removeItem("draft-title");
-    localStorage.removeItem("draft-content");
-    localStorage.removeItem("draft-tags");
-
-    return null;
-  }, null);
+  const autoResize = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    e.target.style.height = "auto";
+    e.target.style.height = `${e.target.scrollHeight}px`;
+  };
 
   return (
-    <form action={formAction} className="space-y-5">
-      <h2 className="text-xl font-bold text-[#6B6357] mb-4 border-b border-[#EBE8E0] pb-2">
-        新しい日記を書く
-      </h2>
-
-      <div>
-        <label className="block text-[13px] text-[#8C8276] font-bold mb-1">
-          日付（未選択の場合は今日になります）
-        </label>
-        {/* ⭐️ iOS Safariのはみ出し完全防止（最強の呪い解除） */}
-        <input
-          type="date"
-          name="date"
-          defaultValue={getToday()} /* ⭐️ 今日を初期値にする！ */
-          /* 💡 value と onChange はコンフリクトを起こすので削除しました！ */
-          style={{ WebkitAppearance: "none" }} // 👈 Appleの独自デザインを完全に無効化！
-          className="appearance-none min-w-0 block w-full max-w-full m-0 box-border px-2 py-3 bg-[#FCF9F2] border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] focus:border-transparent outline-none text-[#4A4A4A] text-base transition"
-        />
+    <form action={clientAction} className="bg-white p-5 sm:p-8 rounded-3xl shadow-sm border border-[#EBE8E0] mb-10 flex flex-col">
+      
+      {/* ⭐️ タブ切り替えスイッチ */}
+      <div className="flex bg-[#F0F4F0] p-1.5 rounded-xl mb-6">
+        <button type="button" onClick={() => setActiveTab("diary")} className={`flex-1 py-2.5 text-sm sm:text-base font-bold rounded-lg transition-all ${activeTab === "diary" ? "bg-white text-[#6B7D6C] shadow-sm" : "text-[#A3B5A5] hover:bg-[#E6EBE6]"}`}>
+          📝 日記モード
+        </button>
+        <button type="button" onClick={() => setActiveTab("growth")} className={`flex-1 py-2.5 text-sm sm:text-base font-bold rounded-lg transition-all ${activeTab === "growth" ? "bg-white text-[#6B7D6C] shadow-sm" : "text-[#A3B5A5] hover:bg-[#E6EBE6]"}`}>
+          🎯 目的・振り返り
+        </button>
       </div>
 
-      <div>
-        <label className="block text-[13px] text-[#8C8276] font-bold mb-1">
-          一言まとめ
-        </label>
-        <input
-          type="text"
-          name="title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="今日の出来事を一言で..."
-          className="block w-full max-w-full m-0 box-border p-3 bg-[#FCF9F2] border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] focus:border-transparent outline-none text-[#4A4A4A] text-base transition"
-        />
+      <div className="mb-5">
+        <input type="date" name="date" defaultValue={getToday()} style={{ WebkitAppearance: "none" }} className="appearance-none block w-full px-3 py-3 bg-[#FCF9F2] border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] outline-none text-[#4A4A4A] font-bold transition" />
       </div>
 
-      <div>
-        <label className="block text-[13px] text-[#8C8276] font-bold mb-1">
-          エピソード
-        </label>
-        <textarea
-          name="content"
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          placeholder="今日あったこと、考えたこと..."
-          rows={5}
-          className="block w-full max-w-full m-0 box-border p-3 bg-[#FCF9F2] border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] focus:border-transparent outline-none text-[#4A4A4A] text-base transition resize-y"
-        ></textarea>
+      {/* 📝 日記モードの入力欄 */}
+      <div className={activeTab === "diary" ? "space-y-5 block" : "hidden"}>
+        <input type="text" name="title" placeholder="今日のタイトル（無題でもOK）" className="w-full p-3 border-b-2 border-[#EBE8E0] focus:border-[#8FA391] bg-transparent outline-none text-[#333333] text-lg sm:text-xl font-bold placeholder-[#B0B0B0] transition" />
+        <textarea ref={contentRef} name="content" placeholder="今日あったエピソード..." onChange={autoResize} rows={4} className="w-full p-4 bg-[#F9FBF9] border border-[#EBE8E0] rounded-2xl focus:ring-2 focus:ring-[#8FA391] outline-none text-[#333333] resize-none transition leading-relaxed" />
+        <input type="text" name="tags" placeholder="タグ（複数ある場合は「、」で区切る）" className="w-full p-4 bg-[#F9FBF9] border border-[#EBE8E0] rounded-2xl focus:ring-2 focus:ring-[#8FA391] outline-none text-[#555555] transition" />
       </div>
 
-      <div>
-        <label className="block text-[13px] text-[#8C8276] font-bold mb-1">
-          タグ（例: 友人、感謝、気づき）
-        </label>
-        <input
-          type="text"
-          name="tags"
-          value={tags}
-          onChange={(e) => setTags(e.target.value)}
-          placeholder="カンマ（、）区切りで入力"
-          className="block w-full max-w-full m-0 box-border p-3 bg-[#FCF9F2] border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] focus:border-transparent outline-none text-[#4A4A4A] text-base transition"
-        />
+      {/* 🎯 目的・振り返りモードの入力欄 */}
+      <div className={activeTab === "growth" ? "space-y-6 block" : "hidden"}>
+        <div className="bg-[#FDFBF7] p-5 rounded-2xl border border-[#F2EFE9]">
+          <label className="block text-sm font-bold text-[#6B7D6C] mb-2 flex items-center gap-1.5"><span className="text-lg">🎯</span> 今日の目的</label>
+          <input ref={purposeRef} type="text" name="purpose" placeholder="今日はどんな1日にしたいですか？" className="w-full p-4 bg-white border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] outline-none text-[#333333] font-medium transition" />
+        </div>
+        <div>
+          <label className="block text-sm font-bold text-[#888888] mb-2 flex items-center gap-1.5"><span className="text-lg">🧠</span> 目的に対して、何を考えましたか？</label>
+          <textarea ref={thoughtProcessRef} name="thoughtProcess" placeholder="なぜそうしようと思った？ 何を大切にしようとした？" onChange={autoResize} rows={2} className="w-full p-4 border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] outline-none text-[#444444] resize-none transition" />
+        </div>
+        <div>
+          <label className="block text-sm font-bold text-[#888888] mb-2 flex items-center gap-1.5"><span className="text-lg">✅</span> 実際に何を行動しましたか？</label>
+          <textarea ref={actionFactRef} name="actionFact" placeholder="どんな行動を取った？ 何を進めた？" onChange={autoResize} rows={2} className="w-full p-4 border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] outline-none text-[#444444] resize-none transition" />
+        </div>
+        <div>
+          <label className="block text-sm font-bold text-[#888888] mb-2 flex items-center gap-1.5"><span className="text-lg">➡️</span> 明日に活かすなら、次の一手は？</label>
+          <textarea ref={nextActionRef} name="nextAction" placeholder="明日はどう動く？" onChange={autoResize} rows={2} className="w-full p-4 border border-[#EBE8E0] rounded-xl focus:ring-2 focus:ring-[#8FA391] outline-none text-[#444444] resize-none transition" />
+        </div>
       </div>
 
-      <div className="pt-2">
-        <SubmitButton />
-      </div>
+      <button type="submit" className="mt-8 w-full bg-[#8FA391] hover:bg-[#7C907E] text-white font-bold text-lg py-4 rounded-2xl transition shadow-sm tracking-widest">
+        記録する
+      </button>
     </form>
   );
 }

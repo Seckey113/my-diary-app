@@ -1,44 +1,38 @@
 import { google } from "googleapis";
-import crypto from "crypto"; // Node.js標準の暗号化モジュール
+import crypto from "crypto";
 
-// ⭐️ 環境変数からパスワードを読み込み、32バイトの強固な暗号鍵を自動生成する
 const ALGORITHM = "aes-256-cbc";
 const PASSWORD = process.env.ENCRYPTION_PASSWORD || "default-fallback-secure-password-string";
-const ENCRYPTION_KEY = crypto.scryptSync(PASSWORD, "salt-string", 32); // 32バイトの鍵に変換
-const IV_LENGTH = 16; // 初期化ベクトル（暗号を毎回ランダムにバラけさせるための調味料）
+const ENCRYPTION_KEY = crypto.scryptSync(PASSWORD, "salt-string", 32);
+const IV_LENGTH = 16;
 
-// 🔒 文字列を暗号化する関数
+const SHEET_NAME = "Data";
+const FULL_RANGE = `${SHEET_NAME}!A:N`;
+
 function encrypt(text: string): string {
   if (!text) return "";
   const iv = crypto.randomBytes(IV_LENGTH);
   const cipher = crypto.createCipheriv(ALGORITHM, ENCRYPTION_KEY, iv);
   let encrypted = cipher.update(text, "utf8", "hex");
   encrypted += cipher.final("hex");
-  // IV（ランダムな値）と暗号文をコロンで繋いで保存する
   return iv.toString("hex") + ":" + encrypted;
 }
 
-// 🔓 暗号化された文字列を元に戻す（復号化）関数
 function decrypt(text: string): string {
   if (!text) return "";
   try {
     const textParts = text.split(":");
     const iv = Buffer.from(textParts.shift()!, "hex");
-    
-    // ⭐️ 修正箇所：Buffer.from(...) での変換をやめ、文字列（hex）のまま渡すように変更
-    const encryptedText = textParts.join(":"); 
-    
+    const encryptedText = textParts.join(":");
     const decipher = crypto.createDecipheriv(ALGORITHM, ENCRYPTION_KEY, iv);
     let decrypted = decipher.update(encryptedText, "hex", "utf8");
     decrypted += decipher.final("utf8");
     return decrypted;
   } catch (error) {
-    // 万が一復号化に失敗した場合（昔の暗号化されていないデータなど）はそのまま返す
     return text;
   }
 }
 
-// 認証クライアントの作成
 async function getSheetsClient() {
   const auth = new google.auth.GoogleAuth({
     credentials: {
@@ -50,13 +44,12 @@ async function getSheetsClient() {
   return google.sheets({ version: "v4", auth });
 }
 
-// 日記一覧の取得（読み込み時に復号化する）
-// ⭐️ 修正箇所1：getDiaries（H列まで読み込むように変更）
+// 📖 日記一覧の取得（A〜N列をすべて読み込む）
 export async function getDiaries() {
   const sheets = await getSheetsClient();
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: "Data!A:H", // ⭐️ A列から【H列】まで範囲を広げる
+    range: FULL_RANGE,
   });
 
   const rows = response.data.values;
@@ -68,167 +61,242 @@ export async function getDiaries() {
 
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
-    if (!row[0]) continue; 
+    if (!row[0]) continue;
 
     const id = row[0];
-    const date = row[1];
-    const title = decrypt(row[2]);
-    const content = decrypt(row[3]);
-    const tags = row[4] ? decrypt(row[4]) : "";
-    
-    // row[5] は F列 (createdAt)
-    // row[6] は G列 (updatedAt)
-    const deletedAt = row[7] || null; // ⭐️ row[7] つまり【H列】をゴミ箱判定に使う！
+    const date = row[1] || "";
+    const title = decrypt(row[2] || "");
+    const content = decrypt(row[3] || "");
+    const tags = decrypt(row[4] || "");
+    const createdAt = row[5] || "";
+    const updatedAt = row[6] || "";
+    const deletedAt = row[7] || null;
 
     if (deletedAt) {
       const deletedTime = new Date(deletedAt).getTime();
-      if (now - deletedTime > thirtyDaysInMs) {
-        continue; // 30日経過していたら完全に見えなくする
-      }
+      if (now - deletedTime > thirtyDaysInMs) continue;
     }
 
-    diaries.push({ id, date, title, content, tags, deletedAt });
+    const purpose = decrypt(row[8] || "");
+    const thoughtProcess = decrypt(row[9] || "");
+    const actionFact = decrypt(row[10] || "");
+    const nextAction = decrypt(row[11] || "");
+    const purposeWrittenAt = row[12] || "";
+    const reflectedAt = row[13] || "";
+
+    diaries.push({
+      id, date, title, content, tags, createdAt, updatedAt, deletedAt,
+      purpose, thoughtProcess, actionFact, nextAction, purposeWrittenAt, reflectedAt
+    });
   }
   return diaries;
 }
 
-// 日記の追加（保存時に暗号化する）
-// ⭐️ 引数の先頭に `date: string` を追加します
-export async function addDiary(date: string, title: string, content: string, tags: string) {
+// ➕ 日記の追加（新規作成時はすべてN列まで一発で作成）
+export async function addDiary(
+  date: string, title: string, content: string, tags: string,
+  purpose: string = "", thoughtProcess: string = "", actionFact: string = "", nextAction: string = "",
+  purposeWrittenAt: string = "", reflectedAt: string = ""
+) {
   const sheets = await getSheetsClient();
-
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
 
-  const encryptedTitle = encrypt(title);
-  const encryptedContent = encrypt(content);
-  const encryptedTags = encrypt(tags);
-
   await sheets.spreadsheets.values.append({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: "Data!A:G",
+    range: FULL_RANGE,
     valueInputOption: "USER_ENTERED",
     requestBody: {
       values: [
-        // ⭐️ 自動生成した日付ではなく、画面から受け取った `date` をそのまま保存します
-        [id, date, encryptedTitle, encryptedContent, encryptedTags, now, now],
+        [
+          id, date, encrypt(title), encrypt(content), encrypt(tags), now, now, "",
+          encrypt(purpose), encrypt(thoughtProcess), encrypt(actionFact), encrypt(nextAction),
+          purposeWrittenAt, reflectedAt
+        ],
       ],
     },
   });
 }
 
-// 日記の削除（行の再書き込み時にも暗号化を維持する）
-// ⭐️ 修正箇所2：deleteDiary（H列に削除日を書く）
+// 📝 修正・進化：【日記モード専用】の更新関数（目的列には絶対に触らない）
+export async function updateDiaryBasic(
+  id: string, date: string, title: string, content: string, tags: string
+) {
+  const sheets = await getSheetsClient();
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: process.env.GOOGLE_SHEET_ID,
+    range: `${SHEET_NAME}!A:A`,
+  });
+
+  const rows = response.data.values;
+  if (!rows) return;
+  const rowIndex = rows.findIndex((row) => row[0] === id);
+  if (rowIndex === -1) return;
+  const rowNumber = rowIndex + 1;
+  const now = new Date().toISOString();
+
+  // B列〜E列（基本情報）をピンポイント上書き
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: process.env.GOOGLE_SHEET_ID,
+    range: `${SHEET_NAME}!B${rowNumber}:E${rowNumber}`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: [[date, encrypt(title), encrypt(content), encrypt(tags)]] },
+  });
+
+  // G列（更新日時）のみ更新
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: process.env.GOOGLE_SHEET_ID,
+    range: `${SHEET_NAME}!G${rowNumber}`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: [[now]] },
+  });
+}
+
+// 🎯 【目的・振り返りモード専用】の更新関数
+// 日記本文・タイトル・タグには絶対に触らず、I〜N列だけを更新する
+export async function updateDiaryGrowth(
+  id: string,
+  purpose: string,
+  thoughtProcess: string,
+  actionFact: string,
+  nextAction: string
+) {
+  const sheets = await getSheetsClient();
+
+  // 既存の purposeWrittenAt / reflectedAt を確認するため、A〜N列を読み込む
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: process.env.GOOGLE_SHEET_ID,
+    range: FULL_RANGE,
+  });
+
+  const rows = response.data.values;
+  if (!rows) return;
+
+  // 指定されたIDの日記が何行目にあるかを探す
+  const rowIndex = rows.findIndex((row) => row[0] === id);
+  if (rowIndex === -1) return;
+
+  const rowNumber = rowIndex + 1;
+  const now = new Date().toISOString();
+
+  // 既存の記録時刻を取得する
+  // M列: purposeWrittenAt
+  // N列: reflectedAt
+  const originalPurposeWrittenAt = rows[rowIndex][12] || "";
+
+  // 目的が入力されているかを判定する
+  const hasPurpose = purpose.trim().length > 0;
+
+  // 目的が初めて入力された場合だけ、目的記入時間を入れる
+  // 目的が空になった場合は、purposeWrittenAt も空に戻す
+  const nextPurposeWrittenAt = hasPurpose
+    ? originalPurposeWrittenAt || now
+    : "";
+
+  // 夜の振り返り欄のどれかに入力があるかを判定する
+  const hasReflection =
+    thoughtProcess.trim().length > 0 ||
+    actionFact.trim().length > 0 ||
+    nextAction.trim().length > 0;
+
+  // 振り返りがある場合は時刻を入れる
+  // 全部空の場合は、未記入扱いにするため reflectedAt も空にする
+  const nextReflectedAt = hasReflection ? now : "";
+
+  // I〜N列だけを更新する
+  // I: purpose
+  // J: thoughtProcess
+  // K: actionFact
+  // L: nextAction
+  // M: purposeWrittenAt
+  // N: reflectedAt
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: process.env.GOOGLE_SHEET_ID,
+    range: `${SHEET_NAME}!I${rowNumber}:N${rowNumber}`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: {
+      values: [
+        [
+          encrypt(purpose),
+          encrypt(thoughtProcess),
+          encrypt(actionFact),
+          encrypt(nextAction),
+          nextPurposeWrittenAt,
+          nextReflectedAt,
+        ],
+      ],
+    },
+  });
+
+  // G列の updatedAt も更新する
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: process.env.GOOGLE_SHEET_ID,
+    range: `${SHEET_NAME}!G${rowNumber}`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: {
+      values: [[now]],
+    },
+  });
+}
+
+// ゴミ箱へ移動（変更なし）
 export async function deleteDiary(id: string) {
   const sheets = await getSheetsClient();
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: "Data!A:A",
+    range: `${SHEET_NAME}!A:A`,
   });
-
   const rows = response.data.values;
   if (!rows) return;
-
   const rowIndex = rows.findIndex((row) => row[0] === id);
   if (rowIndex === -1) return;
 
-  const rowNumber = rowIndex + 1;
-  const deletedAt = new Date().toISOString(); 
-
   await sheets.spreadsheets.values.update({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: `Data!H${rowNumber}`, // ⭐️ ゴミ箱マークを【H列】に書き込む
+    range: `${SHEET_NAME}!H${rowIndex + 1}`,
     valueInputOption: "USER_ENTERED",
-    requestBody: {
-      values: [[deletedAt]],
-    },
+    requestBody: { values: [[new Date().toISOString()]] },
   });
 }
 
-// ⭐️ 新しく追加する更新用の関数
-export async function updateDiary(id: string, date: string, title: string, content: string, tags: string) {
-  const sheets = await getSheetsClient();
-  
-  // まずは全データを取得して、更新したい日記の「行番号」を見つけます
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: "Data!A:A", // IDの列だけ取得
-  });
-  
-  const rows = response.data.values;
-  if (!rows) return;
-
-  const rowIndex = rows.findIndex((row) => row[0] === id);
-  if (rowIndex === -1) return;
-
-  const rowNumber = rowIndex + 1; // スプレッドシートの行番号は1から始まるため
-
-  // 暗号化してセキュリティを保ったまま上書き
-  const encryptedTitle = encrypt(title);
-  const encryptedContent = encrypt(content);
-  const encryptedTags = encrypt(tags);
-
-  // 見つけた行のB列（日付）〜E列（タグ）を上書きします
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: `Data!B${rowNumber}:E${rowNumber}`,
-    valueInputOption: "USER_ENTERED",
-    requestBody: {
-      values: [
-        [date, encryptedTitle, encryptedContent, encryptedTags],
-      ],
-    },
-  });
-}
-
-// ⭐️ 修正箇所3：restoreDiary（H列を空にする）
+// 日記の復元（変更なし）
 export async function restoreDiary(id: string) {
   const sheets = await getSheetsClient();
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: "Data!A:A",
+    range: `${SHEET_NAME}!A:A`,
   });
-
   const rows = response.data.values;
   if (!rows) return;
-
   const rowIndex = rows.findIndex((row) => row[0] === id);
   if (rowIndex === -1) return;
 
-  const rowNumber = rowIndex + 1;
-
   await sheets.spreadsheets.values.update({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: `Data!H${rowNumber}`, // ⭐️ 復元する時は【H列】を空っぽにする
+    range: `${SHEET_NAME}!H${rowIndex + 1}`,
     valueInputOption: "USER_ENTERED",
-    requestBody: {
-      values: [[""]],
-    },
+    requestBody: { values: [[""]] },
   });
 }
 
-// ⭐️ 修正箇所4：permanentlyDeleteDiary（A〜H列まで全て消去）
+// 日記の完全削除（A〜N列をまるごと消去に拡張）
 export async function permanentlyDeleteDiary(id: string) {
   const sheets = await getSheetsClient();
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: "Data!A:A",
+    range: `${SHEET_NAME}!A:A`,
   });
-
   const rows = response.data.values;
   if (!rows) return;
-
   const rowIndex = rows.findIndex((row) => row[0] === id);
   if (rowIndex === -1) return;
 
-  const rowNumber = rowIndex + 1;
-
   await sheets.spreadsheets.values.update({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: `Data!A${rowNumber}:H${rowNumber}`, // ⭐️ A列から【H列】までまるごと指定
+    range: `${SHEET_NAME}!A${rowIndex + 1}:N${rowIndex + 1}`,
     valueInputOption: "USER_ENTERED",
     requestBody: {
-      values: [["", "", "", "", "", "", "", ""]], // ⭐️ 空文字を8個(A,B,C,D,E,F,G,H)に増やす！
+      values: [["", "", "", "", "", "", "", "", "", "", "", "", "", ""]],
     },
   });
 }
