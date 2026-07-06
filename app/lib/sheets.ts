@@ -6,8 +6,8 @@ const PASSWORD = process.env.ENCRYPTION_PASSWORD || "default-fallback-secure-pas
 const ENCRYPTION_KEY = crypto.scryptSync(PASSWORD, "salt-string", 32);
 const IV_LENGTH = 16;
 
-const SHEET_NAME = "Data";
-const FULL_RANGE = `${SHEET_NAME}!A:N`;
+const SHEET_DATA = "Data";
+const SHEET_REVIEWS = "Reviews";
 
 function encrypt(text: string): string {
   if (!text) return "";
@@ -44,12 +44,27 @@ async function getSheetsClient() {
   return google.sheets({ version: "v4", auth });
 }
 
-// 📖 日記一覧の取得（A〜N列をすべて読み込む）
+// ⭐️ 日付表記のゆれを吸収する関数（2026-07-06 や 2026/7/6 を 2026/07/06 に統一）
+function normalizeDateKey(dateStr: string) {
+  if (!dateStr) return "";
+  const normalized = String(dateStr).replace(/-/g, "/");
+  const parts = normalized.split("/");
+  if (parts.length !== 3) return String(dateStr);
+  const year = parts[0];
+  const month = parts[1].padStart(2, "0");
+  const day = parts[2].padStart(2, "0");
+  return `${year}/${month}/${day}`;
+}
+
+/* =========================================================================
+   📝 日記エピソード用関数（Dataシート / A〜H列）
+========================================================================= */
+
 export async function getDiaries() {
   const sheets = await getSheetsClient();
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: FULL_RANGE,
+    range: `${SHEET_DATA}!A:H`,
   });
 
   const rows = response.data.values;
@@ -77,55 +92,31 @@ export async function getDiaries() {
       if (now - deletedTime > thirtyDaysInMs) continue;
     }
 
-    const purpose = decrypt(row[8] || "");
-    const thoughtProcess = decrypt(row[9] || "");
-    const actionFact = decrypt(row[10] || "");
-    const nextAction = decrypt(row[11] || "");
-    const purposeWrittenAt = row[12] || "";
-    const reflectedAt = row[13] || "";
-
-    diaries.push({
-      id, date, title, content, tags, createdAt, updatedAt, deletedAt,
-      purpose, thoughtProcess, actionFact, nextAction, purposeWrittenAt, reflectedAt
-    });
+    diaries.push({ id, date, title, content, tags, createdAt, updatedAt, deletedAt });
   }
   return diaries;
 }
 
-// ➕ 日記の追加（新規作成時はすべてN列まで一発で作成）
-export async function addDiary(
-  date: string, title: string, content: string, tags: string,
-  purpose: string = "", thoughtProcess: string = "", actionFact: string = "", nextAction: string = "",
-  purposeWrittenAt: string = "", reflectedAt: string = ""
-) {
+export async function addDiary(date: string, title: string, content: string, tags: string) {
   const sheets = await getSheetsClient();
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
 
   await sheets.spreadsheets.values.append({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: FULL_RANGE,
-    valueInputOption: "USER_ENTERED",
+    range: `${SHEET_DATA}!A:H`,
+    valueInputOption: "RAW", // ⭐️ USER_ENTEREDからRAWに変更
     requestBody: {
-      values: [
-        [
-          id, date, encrypt(title), encrypt(content), encrypt(tags), now, now, "",
-          encrypt(purpose), encrypt(thoughtProcess), encrypt(actionFact), encrypt(nextAction),
-          purposeWrittenAt, reflectedAt
-        ],
-      ],
+      values: [[id, date, encrypt(title), encrypt(content), encrypt(tags), now, now, ""]],
     },
   });
 }
 
-// 📝 修正・進化：【日記モード専用】の更新関数（目的列には絶対に触らない）
-export async function updateDiaryBasic(
-  id: string, date: string, title: string, content: string, tags: string
-) {
+export async function updateDiary(id: string, date: string, title: string, content: string, tags: string) {
   const sheets = await getSheetsClient();
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: `${SHEET_NAME}!A:A`,
+    range: `${SHEET_DATA}!A:A`,
   });
 
   const rows = response.data.values;
@@ -135,116 +126,26 @@ export async function updateDiaryBasic(
   const rowNumber = rowIndex + 1;
   const now = new Date().toISOString();
 
-  // B列〜E列（基本情報）をピンポイント上書き
   await sheets.spreadsheets.values.update({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: `${SHEET_NAME}!B${rowNumber}:E${rowNumber}`,
-    valueInputOption: "USER_ENTERED",
+    range: `${SHEET_DATA}!B${rowNumber}:E${rowNumber}`,
+    valueInputOption: "RAW", // ⭐️ RAWに変更
     requestBody: { values: [[date, encrypt(title), encrypt(content), encrypt(tags)]] },
   });
 
-  // G列（更新日時）のみ更新
   await sheets.spreadsheets.values.update({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: `${SHEET_NAME}!G${rowNumber}`,
-    valueInputOption: "USER_ENTERED",
+    range: `${SHEET_DATA}!G${rowNumber}`,
+    valueInputOption: "RAW",
     requestBody: { values: [[now]] },
   });
 }
 
-// 🎯 【目的・振り返りモード専用】の更新関数
-// 日記本文・タイトル・タグには絶対に触らず、I〜N列だけを更新する
-export async function updateDiaryGrowth(
-  id: string,
-  purpose: string,
-  thoughtProcess: string,
-  actionFact: string,
-  nextAction: string
-) {
-  const sheets = await getSheetsClient();
-
-  // 既存の purposeWrittenAt / reflectedAt を確認するため、A〜N列を読み込む
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: FULL_RANGE,
-  });
-
-  const rows = response.data.values;
-  if (!rows) return;
-
-  // 指定されたIDの日記が何行目にあるかを探す
-  const rowIndex = rows.findIndex((row) => row[0] === id);
-  if (rowIndex === -1) return;
-
-  const rowNumber = rowIndex + 1;
-  const now = new Date().toISOString();
-
-  // 既存の記録時刻を取得する
-  // M列: purposeWrittenAt
-  // N列: reflectedAt
-  const originalPurposeWrittenAt = rows[rowIndex][12] || "";
-
-  // 目的が入力されているかを判定する
-  const hasPurpose = purpose.trim().length > 0;
-
-  // 目的が初めて入力された場合だけ、目的記入時間を入れる
-  // 目的が空になった場合は、purposeWrittenAt も空に戻す
-  const nextPurposeWrittenAt = hasPurpose
-    ? originalPurposeWrittenAt || now
-    : "";
-
-  // 夜の振り返り欄のどれかに入力があるかを判定する
-  const hasReflection =
-    thoughtProcess.trim().length > 0 ||
-    actionFact.trim().length > 0 ||
-    nextAction.trim().length > 0;
-
-  // 振り返りがある場合は時刻を入れる
-  // 全部空の場合は、未記入扱いにするため reflectedAt も空にする
-  const nextReflectedAt = hasReflection ? now : "";
-
-  // I〜N列だけを更新する
-  // I: purpose
-  // J: thoughtProcess
-  // K: actionFact
-  // L: nextAction
-  // M: purposeWrittenAt
-  // N: reflectedAt
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: `${SHEET_NAME}!I${rowNumber}:N${rowNumber}`,
-    valueInputOption: "USER_ENTERED",
-    requestBody: {
-      values: [
-        [
-          encrypt(purpose),
-          encrypt(thoughtProcess),
-          encrypt(actionFact),
-          encrypt(nextAction),
-          nextPurposeWrittenAt,
-          nextReflectedAt,
-        ],
-      ],
-    },
-  });
-
-  // G列の updatedAt も更新する
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: `${SHEET_NAME}!G${rowNumber}`,
-    valueInputOption: "USER_ENTERED",
-    requestBody: {
-      values: [[now]],
-    },
-  });
-}
-
-// ゴミ箱へ移動（変更なし）
 export async function deleteDiary(id: string) {
   const sheets = await getSheetsClient();
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: `${SHEET_NAME}!A:A`,
+    range: `${SHEET_DATA}!A:A`,
   });
   const rows = response.data.values;
   if (!rows) return;
@@ -253,18 +154,17 @@ export async function deleteDiary(id: string) {
 
   await sheets.spreadsheets.values.update({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: `${SHEET_NAME}!H${rowIndex + 1}`,
-    valueInputOption: "USER_ENTERED",
+    range: `${SHEET_DATA}!H${rowIndex + 1}`,
+    valueInputOption: "RAW",
     requestBody: { values: [[new Date().toISOString()]] },
   });
 }
 
-// 日記の復元（変更なし）
 export async function restoreDiary(id: string) {
   const sheets = await getSheetsClient();
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: `${SHEET_NAME}!A:A`,
+    range: `${SHEET_DATA}!A:A`,
   });
   const rows = response.data.values;
   if (!rows) return;
@@ -273,18 +173,17 @@ export async function restoreDiary(id: string) {
 
   await sheets.spreadsheets.values.update({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: `${SHEET_NAME}!H${rowIndex + 1}`,
-    valueInputOption: "USER_ENTERED",
+    range: `${SHEET_DATA}!H${rowIndex + 1}`,
+    valueInputOption: "RAW",
     requestBody: { values: [[""]] },
   });
 }
 
-// 日記の完全削除（A〜N列をまるごと消去に拡張）
 export async function permanentlyDeleteDiary(id: string) {
   const sheets = await getSheetsClient();
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: `${SHEET_NAME}!A:A`,
+    range: `${SHEET_DATA}!A:A`,
   });
   const rows = response.data.values;
   if (!rows) return;
@@ -293,10 +192,112 @@ export async function permanentlyDeleteDiary(id: string) {
 
   await sheets.spreadsheets.values.update({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: `${SHEET_NAME}!A${rowIndex + 1}:N${rowIndex + 1}`,
-    valueInputOption: "USER_ENTERED",
-    requestBody: {
-      values: [["", "", "", "", "", "", "", "", "", "", "", "", "", ""]],
-    },
+    range: `${SHEET_DATA}!A${rowIndex + 1}:H${rowIndex + 1}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [["", "", "", "", "", "", "", ""]] },
   });
+}
+
+/* =========================================================================
+   🎯 目的・振り返り用関数（Reviewsシート / A〜I列）
+========================================================================= */
+
+export async function getReviews() {
+  const sheets = await getSheetsClient();
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: process.env.GOOGLE_SHEET_ID,
+    range: `${SHEET_REVIEWS}!A:I`,
+  });
+
+  const rows = response.data.values;
+  if (!rows) return [];
+
+  const reviews = [];
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row[0]) continue;
+
+    reviews.push({
+      date: normalizeDateKey(row[0] || ""), // ⭐️ ここを追加！
+      purpose: decrypt(row[1] || ""),
+      thoughtProcess: decrypt(row[2] || ""),
+      actionFact: decrypt(row[3] || ""),
+      nextAction: decrypt(row[4] || ""),
+      purposeWrittenAt: row[5] || "",
+      reflectedAt: row[6] || "",
+      createdAt: row[7] || "",
+      updatedAt: row[8] || "",
+    });
+  }
+  return reviews;
+}
+
+// ⭐️ 振り返りのUpsert（無ければ追加、あれば更新）
+export async function upsertReview(
+  date: string, purpose: string, thoughtProcess: string, actionFact: string, nextAction: string
+) {
+  const sheets = await getSheetsClient();
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: process.env.GOOGLE_SHEET_ID,
+    range: `${SHEET_REVIEWS}!A:A`,
+  });
+
+  const rows = response.data.values || [];
+  const targetDate = normalizeDateKey(date); // ⭐️ 表記ゆれを徹底排除
+  const rowIndex = rows.findIndex((row) => normalizeDateKey(row[0] || "") === targetDate);
+  
+  const now = new Date().toISOString();
+  const hasPurpose = purpose.trim().length > 0;
+  const hasReflection = thoughtProcess.trim().length > 0 || actionFact.trim().length > 0 || nextAction.trim().length > 0;
+
+  if (rowIndex === -1) {
+    // 【新規追加】
+    const purposeWrittenAt = hasPurpose ? now : "";
+    const reflectedAt = hasReflection ? now : "";
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: `${SHEET_REVIEWS}!A:I`,
+      valueInputOption: "RAW", // ⭐️ RAWに変更
+      requestBody: {
+        values: [[
+          targetDate, encrypt(purpose), encrypt(thoughtProcess), encrypt(actionFact), encrypt(nextAction),
+          purposeWrittenAt, reflectedAt, now, now
+        ]],
+      },
+    });
+  } else {
+    // 【上書き更新】
+    const rowNumber = rowIndex + 1;
+    
+    // 既存のタイムスタンプを取得するため、その行全体を読み直す
+    const existingRowResponse = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: `${SHEET_REVIEWS}!A${rowNumber}:I${rowNumber}`,
+    });
+    const existingRow = existingRowResponse.data.values?.[0] || [];
+    const existingPurposeWrittenAt = existingRow[5] || "";
+    
+    const nextPurposeWrittenAt = hasPurpose ? (existingPurposeWrittenAt || now) : "";
+    const nextReflectedAt = hasReflection ? now : "";
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: `${SHEET_REVIEWS}!B${rowNumber}:G${rowNumber}`,
+      valueInputOption: "RAW", // ⭐️ RAWに変更
+      requestBody: {
+        values: [[
+          encrypt(purpose), encrypt(thoughtProcess), encrypt(actionFact), encrypt(nextAction),
+          nextPurposeWrittenAt, nextReflectedAt
+        ]],
+      },
+    });
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: `${SHEET_REVIEWS}!I${rowNumber}`,
+      valueInputOption: "RAW",
+      requestBody: { values: [[now]] },
+    });
+  }
 }
