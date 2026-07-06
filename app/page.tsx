@@ -9,7 +9,7 @@ import {
   getReviewsFresh,
   upsertReview,
 } from "./lib/sheets";
-import { revalidatePath, revalidateTag } from "next/cache"; // ⭐️ revalidateTag を追加！
+import { revalidatePath, revalidateTag } from "next/cache";
 import { cookies } from "next/headers";
 import { Suspense } from "react";
 import { DiaryForm } from "./form";
@@ -89,7 +89,6 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
     );
   }
 
-  // ⭐️ ここはキャッシュされた超高速データが読み込まれます！
   const diaries = await getDiaries();
   const reviews = await getReviews();
   
@@ -119,7 +118,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
 
       await addDiary(date, title || "無題", content || "エピソード記録なし", tags || "タグなし");
 
-      revalidateTag("diaries"); // ⭐️ 日記のキャッシュを明示的に破棄
+      revalidateTag("diaries", "max"); // ⭐️ 修正：第2引数を追加
       revalidatePath("/");
       return;
     }
@@ -140,7 +139,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
 
       await upsertReview(date, mergedPurpose, mergedThoughtProcess, mergedActionFact, mergedNextAction);
 
-      revalidateTag("reviews"); // ⭐️ 振り返りのキャッシュを明示的に破棄
+      revalidateTag("reviews", "max"); // ⭐️ 修正：第2引数を追加
       revalidatePath("/");
     }
   }
@@ -157,7 +156,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
     
     await updateDiary(id, date, title, content, tags);
     
-    revalidateTag("diaries"); // ⭐️ キャッシュ破棄
+    revalidateTag("diaries", "max"); // ⭐️ 修正：第2引数を追加
     revalidatePath("/");
   }
 
@@ -173,7 +172,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
     
     await upsertReview(date, purpose, thoughtProcess, actionFact, nextAction);
     
-    revalidateTag("reviews"); // ⭐️ キャッシュ破棄
+    revalidateTag("reviews", "max"); // ⭐️ 修正：第2引数を追加
     revalidatePath("/");
   }
 
@@ -183,7 +182,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
     if (!id) return;
     await deleteDiary(id);
     
-    revalidateTag("diaries"); // ⭐️ キャッシュ破棄
+    revalidateTag("diaries", "max"); // ⭐️ 修正：第2引数を追加
     revalidatePath("/");
   }
 
@@ -193,7 +192,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
     if (!id) return;
     await restoreDiary(id);
     
-    revalidateTag("diaries"); // ⭐️ キャッシュ破棄
+    revalidateTag("diaries", "max"); // ⭐️ 修正：第2引数を追加
     revalidatePath("/");
   }
 
@@ -203,7 +202,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
     if (!id) return;
     await permanentlyDeleteDiary(id);
     
-    revalidateTag("diaries"); // ⭐️ キャッシュ破棄
+    revalidateTag("diaries", "max"); // ⭐️ 修正：第2引数を追加
     revalidatePath("/");
   }
 
