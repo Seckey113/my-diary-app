@@ -22,7 +22,6 @@ function normalizeDateKey(dateStr: string) {
 }
 
 // 保存ボタン専用のコンポーネント
-// 親の <form> が送信中かどうかを useFormStatus で取得します
 function SubmitButton({ isSaved }: { isSaved: boolean }) {
   const { pending } = useFormStatus();
 
@@ -49,7 +48,7 @@ function SubmitButton({ isSaved }: { isSaved: boolean }) {
 
 export function DiaryForm({
   clientAction,
-  existingReviews = [], // page.tsx から既存の振り返りデータ群を受け取る
+  existingReviews = [],
 }: {
   clientAction: (formData: FormData) => Promise<void>;
   existingReviews?: any[];
@@ -59,14 +58,11 @@ export function DiaryForm({
   const focus = searchParams.get("focus");
 
   const [activeTab, setActiveTab] = useState<"diary" | "growth">(initialMode);
-
-  // 選択されている日付を管理する状態
   const [selectedDate, setSelectedDate] = useState(getToday());
 
-  // 保存完了表示を一時的に出すための状態
+  // 保存完了表示と、エラーメッセージを管理する状態
   const [isSaved, setIsSaved] = useState(false);
-
-  // 「保存しました！」を消すタイマーを管理します
+  const [formError, setFormError] = useState(""); 
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const purposeRef = useRef<HTMLInputElement>(null);
@@ -75,7 +71,7 @@ export function DiaryForm({
   const nextActionRef = useRef<HTMLTextAreaElement>(null);
   const contentRef = useRef<HTMLTextAreaElement>(null);
 
-  // 現在選択されている日付の「既存の目的・振り返りデータ」を探して先読みします
+  // 現在選択されている日付のデータを先読み
   const currentKey = normalizeDateKey(selectedDate);
   const currentReview = existingReviews.find((r) => normalizeDateKey(r.date) === currentKey) || {
     purpose: "",
@@ -95,7 +91,7 @@ export function DiaryForm({
     }
   }, [focus, activeTab]);
 
-  // 画面を離れたときにタイマーが残らないようにします
+  // 画面を離れたときにタイマーを解除
   useEffect(() => {
     return () => {
       if (savedTimerRef.current) {
@@ -112,31 +108,57 @@ export function DiaryForm({
   return (
     <form
       action={async (formData) => {
-        // 送信開始時に、前回の「保存しました！」表示を消します
+        // 送信開始時に、前回の成功表示とエラー表示をリセット
         setIsSaved(false);
+        setFormError("");
 
-        // 既存のServer Actionを実行します
-        await clientAction(formData);
+        // FormDataから値を取り出し、前後の空白を削除
+        const getValue = (name: string) => String(formData.get(name) || "").trim();
 
-        // 保存完了後に、ボタンを「保存しました！」表示にします
-        setIsSaved(true);
+        // 現在のタブごとに「完全な空欄」かどうかを判定
+        const isDiaryEmpty = !getValue("title") && !getValue("content") && !getValue("tags");
+        const isGrowthEmpty = !getValue("purpose") && !getValue("thoughtProcess") && !getValue("actionFact") && !getValue("nextAction");
 
-        // すでにタイマーが動いている場合は一度止めます
-        if (savedTimerRef.current) {
-          clearTimeout(savedTimerRef.current);
+        // 日記タブで完全に空欄なら、保存せずにエラーを表示
+        if (activeTab === "diary" && isDiaryEmpty) {
+          setFormError("日記エピソードの内容を1つ以上入力してください。");
+          return; 
         }
 
-        // 2秒後に通常の「記録する」表示へ戻します
-        savedTimerRef.current = setTimeout(() => {
-          setIsSaved(false);
-        }, 2000);
+        // 目的・振り返りタブで完全に空欄なら、保存せずにエラーを表示
+        if (activeTab === "growth" && isGrowthEmpty) {
+          setFormError("目的・振り返りの内容を1つ以上入力してください。");
+          return; 
+        }
+
+        // --- ⭐️ 入力がある場合のみ、ここから下の保存処理が走る ---
+        try {
+          // 既存のServer Actionを実行
+          await clientAction(formData);
+
+          // 保存完了後に、ボタンを「保存しました！」表示にする
+          setIsSaved(true);
+
+          // すでにタイマーが動いている場合は一度止める
+          if (savedTimerRef.current) {
+            clearTimeout(savedTimerRef.current);
+          }
+
+          // 2秒後に通常の「記録する」表示へ戻す
+          savedTimerRef.current = setTimeout(() => {
+            setIsSaved(false);
+          }, 2000);
+        } catch (error) {
+          console.error(error);
+          // ⭐️ API制限や通信エラーの時は赤い文字で知らせる
+          setFormError("保存中にエラーが発生しました。通信環境等を確認してもう一度お試しください。");
+        }
       }}
       className="bg-white p-5 sm:p-8 rounded-3xl shadow-sm border border-[#EBE8E0] mb-10 flex flex-col"
     >
-      {/* 現在どちらのタブを保存しようとしているかをサーバー側へ伝えます */}
       <input type="hidden" name="entryType" value={activeTab} />
 
-      {/* タブ切り替えスイッチ */}
+      {/* タブ切り替え */}
       <div className="flex bg-[#F0F4F0] p-1.5 rounded-xl mb-6">
         <button
           type="button"
@@ -163,7 +185,7 @@ export function DiaryForm({
         </button>
       </div>
 
-      {/* 日付入力欄 */}
+      {/* 日付 */}
       <div className="mb-5">
         <input
           type="date"
@@ -175,7 +197,7 @@ export function DiaryForm({
         />
       </div>
 
-      {/* 日記モードの入力欄 */}
+      {/* 日記タブの入力欄 */}
       <div className={activeTab === "diary" ? "space-y-5 block" : "hidden"}>
         <input
           type="text"
@@ -183,7 +205,6 @@ export function DiaryForm({
           placeholder="今日の一言"
           className="w-full p-3 border-b-2 border-[#EBE8E0] focus:border-[#8FA391] bg-transparent outline-none text-[#333333] text-lg sm:text-xl font-bold placeholder-[#B0B0B0] transition"
         />
-
         <textarea
           ref={contentRef}
           name="content"
@@ -192,7 +213,6 @@ export function DiaryForm({
           rows={4}
           className="w-full p-4 bg-[#F9FBF9] border border-[#EBE8E0] rounded-2xl focus:ring-2 focus:ring-[#8FA391] outline-none text-[#333333] resize-none transition leading-relaxed"
         />
-
         <input
           type="text"
           name="tags"
@@ -201,14 +221,12 @@ export function DiaryForm({
         />
       </div>
 
-      {/* 目的・振り返りモードの入力欄 */}
-      {/* key={selectedDate} により、日付が変わったときに初期値を現在のReviewデータにリセットします */}
+      {/* 目的・振り返りタブの入力欄 */}
       <div key={selectedDate} className={activeTab === "growth" ? "space-y-6 block" : "hidden"}>
         <div className="bg-[#FDFBF7] p-5 rounded-2xl border border-[#F2EFE9]">
           <label className="block text-sm font-bold text-[#6B7D6C] mb-2 flex items-center gap-1.5">
             <span className="text-lg">🎯</span> 今日の目的
           </label>
-
           <input
             ref={purposeRef}
             type="text"
@@ -223,7 +241,6 @@ export function DiaryForm({
           <label className="block text-sm font-bold text-[#888888] mb-2 flex items-center gap-1.5">
             <span className="text-lg">🧠</span> 目的に対して、何を考えましたか？
           </label>
-
           <textarea
             ref={thoughtProcessRef}
             name="thoughtProcess"
@@ -239,7 +256,6 @@ export function DiaryForm({
           <label className="block text-sm font-bold text-[#888888] mb-2 flex items-center gap-1.5">
             <span className="text-lg">✅</span> 実際に何を行動しましたか？
           </label>
-
           <textarea
             ref={actionFactRef}
             name="actionFact"
@@ -255,7 +271,6 @@ export function DiaryForm({
           <label className="block text-sm font-bold text-[#888888] mb-2 flex items-center gap-1.5">
             <span className="text-lg">➡️</span> 明日に活かすなら、次の一手は？
           </label>
-
           <textarea
             ref={nextActionRef}
             name="nextAction"
@@ -268,6 +283,17 @@ export function DiaryForm({
         </div>
       </div>
 
+      {/* エラーがある場合だけ、ボタンの上に赤いメッセージを表示 */}
+      {formError && (
+        <p
+          role="alert"
+          className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-500"
+        >
+          {formError}
+        </p>
+      )}
+
+      {/* 魔法の保存ボタン */}
       <SubmitButton isSaved={isSaved} />
     </form>
   );
